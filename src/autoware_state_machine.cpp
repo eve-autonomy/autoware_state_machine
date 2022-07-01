@@ -39,6 +39,7 @@ void AutowareStateMachine::onAwapiAutowareState(
        - Check "SurrondObstacleCheck" with the highest priority.
          In the "SurrondObstacleCheck", the distance information "dist_to_stop_pose" is not evaluated because the object is already approaching.
        - For other "StopReasons", the one with the smallest distance information "dist_to_stop_pose" is given priority.
+       - If there are multiple "StopReasons" within the same distance, "ObstacleStop" has priority.
      * Since it is a Float expression, the epsilon value is used because the matching comparison of 0 values is not valid. */
   stop_reason_ = "";
   cur_dist_to_stop_pose_ = dist_to_stop_pose_max_th_;
@@ -54,6 +55,16 @@ void AutowareStateMachine::onAwapiAutowareState(
 
       if (tmp_stop_reason.stop_factors.size() != 0) {
         for (const auto tmp_stop_factor : tmp_stop_reason.stop_factors) {
+          if ((std::abs(cur_dist_to_stop_pose_) <= double_epsilon) &&
+            (stop_reason_ == tier4_planning_msgs::msg::StopReason::OBSTACLE_STOP))
+          {
+            break;
+          }
+          if ((std::abs(tmp_stop_factor.dist_to_stop_pose - cur_dist_to_stop_pose_) <= double_epsilon) &&
+            (stop_reason_ == tier4_planning_msgs::msg::StopReason::OBSTACLE_STOP))
+          {
+            continue;
+          }
           if (std::abs(tmp_stop_factor.dist_to_stop_pose) <= double_epsilon) {
             cur_dist_to_stop_pose_ = 0.0;
             stop_reason_ = tmp_stop_reason.reason;
