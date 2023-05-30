@@ -78,7 +78,7 @@ std::pair<std::string, double> AutowareStateMachine::getNearestStopReason(
   auto compare =
     [](const ReasonInfo & a, const ReasonInfo & b) -> bool {
       // 優先度
-      // 1. 距離がどちらとも1e-3（1mm）より小さい場合
+      // 1. 距離がどちらともほぼ0m（1e-3（1mm）より小さい）場合
       //    a. SURROUND_OBSTACLE_CHECK
       //    b. OBSTACLE_STOP
       //    c. DETECTION_AREA
