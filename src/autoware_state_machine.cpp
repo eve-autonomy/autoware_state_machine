@@ -31,47 +31,89 @@ void AutowareStateMachine::onAwapiAutowareState(
   cur_control_mode_ = msg_ptr->control_mode;
   cur_emergency_holding_ = msg_ptr->hazard_status.status.emergency_holding;
 
-  const auto &tmp = getNearestStopReason(msg_ptr->stop_reason.stop_reasons);
-  stop_reason_ = tmp.reason;
-  cur_dist_to_stop_pose_ = tmp.distance;
+  auto [stop_reason, cur_dist_to_stop_pose] =
+    getNearestStopReason(msg_ptr->stop_reason.stop_reasons);
 
+  stop_reason_ = stop_reason;
+  cur_dist_to_stop_pose_ = cur_dist_to_stop_pose;
+  // RCLCPP_INFO(this->get_logger(), "final stop_reason: %s, distance: %lf", stop_reason_.c_str(), cur_dist_to_stop_pose_);
   ChangeState();
 }
 
-ReasonWithDistance AutowareStateMachine::getNearestStopReason(
+std::pair<std::string, double> AutowareStateMachine::getNearestStopReason(
   const std::vector<tier4_planning_msgs::msg::StopReason> & stop_reasons)
 {
-  // 比較関数
-  auto compare =
-    [](ReasonWithDistance a, ReasonWithDistance b) -> bool {
-      // 優先度
-      // 1. SURROUND_OBSTACLE_CHECK
-      // 2. OBSTACLE_STOP
-      // 3. DETECTION_AREA
-      // 4. 距離が近い
-      if (b.reason == tier4_planning_msgs::msg::StopReason::SURROUND_OBSTACLE_CHECK)
-        return true;
-      else if (b.reason == tier4_planning_msgs::msg::StopReason::OBSTACLE_STOP)
-        return true;
-      else if (b.reason == tier4_planning_msgs::msg::StopReason::DETECTION_AREA)
-        return true;
-      else
-        return a.distance > b.distance;
+  using StopReason = tier4_planning_msgs::msg::StopReason;
+
+  struct ReasonInfo
+  {
+    std::string reason;
+    double distance;
+    int8_t priority;
+    explicit ReasonInfo(
+      const std::string & a_reason, const double a_distance, const int8_t a_priority) {
+      reason = a_reason;
+      distance = a_distance;
+      priority = a_priority;
+    }
+  };
+
+  // 優先度付与関数
+  auto getPriority =
+    [](const std::string & stop_reason) -> int8_t {
+      if (stop_reason == StopReason::SURROUND_OBSTACLE_CHECK) {
+        return 1;
+      } else if (stop_reason == StopReason::OBSTACLE_STOP) {
+        return 2;
+      } else if (stop_reason == StopReason::DETECTION_AREA) {
+        return 3;
+      } else if (stop_reason == StopReason::VIRTUAL_TRAFFIC_LIGHT) {
+        return 4;
+      } else if (stop_reason == StopReason::STOP_LINE) {
+        return 5;
+      } else {
+        return 10;
+      }
     };
 
-  std::priority_queue<ReasonWithDistance, std::vector<ReasonWithDistance>, decltype(compare)>
-    que{compare};
+  // 比較関数
+  auto compare =
+    [](const ReasonInfo & a, const ReasonInfo & b) -> bool {
+      // 優先度
+      // 1. 距離がどちらとも1e-3（1mm）より小さい場合
+      //    a. SURROUND_OBSTACLE_CHECK
+      //    b. OBSTACLE_STOP
+      //    c. DETECTION_AREA
+      //    d. VIRTUAL_TRAFFIC_LIGHT
+      //    e. STOP_LINE
+      // 2. 距離が近い
+      const double ERROR = 1e-3;
+      if (a.distance < ERROR && b.distance < ERROR) {
+        return a.priority > b.priority;
+      } else {
+        return a.distance > b.distance;
+      }
+    };
+
+  std::priority_queue<ReasonInfo, std::vector<ReasonInfo>, decltype(compare)> que{compare};
 
   // 優先度付並び替え
-  for (const auto & reason : stop_reasons) {
-    for (const auto & factor : reason.stop_factors) {
+  for (const auto & r : stop_reasons) {
+    for (const auto & f : r.stop_factors) {
       // しきい値よりも遠い距離にある障害物は弾く
-      if (factor.dist_to_stop_pose < dist_to_stop_pose_max_th_)
-        que.push(ReasonWithDistance(reason.reason , factor.dist_to_stop_pose));
+      if (f.dist_to_stop_pose < dist_to_stop_pose_max_th_) {
+        que.push(ReasonInfo(r.reason, f.dist_to_stop_pose, getPriority(r.reason)));
+      }
     }
   }
-
-  return !que.empty() ? que.top() : ReasonWithDistance();
+  const auto res = !que.empty() ? std::make_pair(que.top().reason, que.top().distance)
+                      : std::make_pair("", 0.0);
+  // RCLCPP_INFO(this->get_logger(), "priority_queue");
+  // while(!que.empty()) {
+  //   RCLCPP_INFO(this->get_logger(), "stop_reason: %s, distance: %lf", que.top().reason.c_str(), que.top().distance);
+  //   que.pop();
+  // }
+  return res;
 }
 
 void AutowareStateMachine::onAwapiVehicleState(
