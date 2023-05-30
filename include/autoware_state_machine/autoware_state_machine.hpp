@@ -49,6 +49,16 @@ enum class ChangeStateReturnItem
   TRANSITION,
 };
 
+struct ReasonWithDistance
+{
+  std::string reason;
+  double distance;
+  explicit ReasonWithDistance(const std::string a_reason = "", const double a_distance = 0.0) {
+    reason = a_reason;
+    distance = a_distance;
+  }
+};
+
 class AutowareStateMachine : public rclcpp::Node
 {
 public:
@@ -180,6 +190,8 @@ private:
   void setEngageProcess(bool request, bool accept);
   std::pair<bool, bool> getEngageProcess(void);
   bool waitingForEngageAccept(void);
+  ReasonWithDistance getNearestStopReason(
+    const std::vector<tier4_planning_msgs::msg::StopReason> & stop_reasons);
 };
 
 }  // namespace autoware_state_machine
