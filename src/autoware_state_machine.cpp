@@ -31,11 +31,9 @@ void AutowareStateMachine::onAwapiAutowareState(
   cur_control_mode_ = msg_ptr->control_mode;
   cur_emergency_holding_ = msg_ptr->hazard_status.status.emergency_holding;
 
-  auto [stop_reason, cur_dist_to_stop_pose] =
-    getNearestStopReason(msg_ptr->stop_reason.stop_reasons);
-
-  stop_reason_ = stop_reason;
-  cur_dist_to_stop_pose_ = cur_dist_to_stop_pose;
+  const auto res = getNearestStopReason(msg_ptr->stop_reason.stop_reasons);
+  stop_reason_ = res.first;
+  cur_dist_to_stop_pose_ = res.second;
   // RCLCPP_INFO(this->get_logger(), "final stop_reason: %s, distance: %lf", stop_reason_.c_str(), cur_dist_to_stop_pose_);
   ChangeState();
 }
