@@ -31,14 +31,14 @@ void AutowareStateMachine::onAwapiAutowareState(
   cur_control_mode_ = msg_ptr->control_mode;
   cur_emergency_holding_ = msg_ptr->hazard_status.status.emergency_holding;
 
-  const auto res = getNearestStopReason(msg_ptr->stop_reason.stop_reasons);
+  const auto res = getNearestStopReasonWithPriority(msg_ptr->stop_reason.stop_reasons);
   stop_reason_ = res.first;
   cur_dist_to_stop_pose_ = res.second;
   // RCLCPP_INFO(this->get_logger(), "final stop_reason: %s, distance: %lf", stop_reason_.c_str(), cur_dist_to_stop_pose_);
   ChangeState();
 }
 
-std::pair<std::string, double> AutowareStateMachine::getNearestStopReason(
+std::pair<std::string, double> AutowareStateMachine::getNearestStopReasonWithPriority(
   const std::vector<tier4_planning_msgs::msg::StopReason> & stop_reasons)
 {
   using StopReason = tier4_planning_msgs::msg::StopReason;
