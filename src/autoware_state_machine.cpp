@@ -105,11 +105,6 @@ std::pair<std::string, double> AutowareStateMachine::getNearestStopReasonWithPri
   }
   const auto res = !que.empty() ? std::make_pair(que.top().reason, que.top().distance)
                       : std::make_pair("", 0.0);
-  // RCLCPP_INFO(this->get_logger(), "priority_queue");
-  // while(!que.empty()) {
-  //   RCLCPP_INFO(this->get_logger(), "stop_reason: %s, distance: %lf", que.top().reason.c_str(), que.top().distance);
-  //   que.pop();
-  // }
   return res;
 }
 
