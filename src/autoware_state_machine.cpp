@@ -34,7 +34,6 @@ void AutowareStateMachine::onAwapiAutowareState(
   const auto res = getNearestStopReasonWithPriority(msg_ptr->stop_reason.stop_reasons);
   stop_reason_ = res.first;
   cur_dist_to_stop_pose_ = res.second;
-  // RCLCPP_INFO(this->get_logger(), "final stop_reason: %s, distance: %lf", stop_reason_.c_str(), cur_dist_to_stop_pose_);
   ChangeState();
 }
 
