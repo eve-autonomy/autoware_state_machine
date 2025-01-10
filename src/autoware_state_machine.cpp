@@ -1012,28 +1012,6 @@ ChangeStateReturnItem AutowareStateMachine::changeState4RunAndStop(void)
     }
 
     if (stop_reason_ == "") {
-      const auto isStopState =
-        (current_service_layer_state_ ==
-        autoware_state_machine_msgs::msg::StateMachine::STATE_STOP_DUETO_APPROACHING_OBSTACLE) ||
-        (current_service_layer_state_ ==
-        autoware_state_machine_msgs::msg::StateMachine::STATE_STOP_DUETO_SURROUNDING_PROXIMITY) ||
-        (current_service_layer_state_ ==
-        autoware_state_machine_msgs::msg::StateMachine::STATE_STOP_DUETO_TRAFFIC_CONDITION);
-
-      /* Suspension without reason is treated as STATE_STOP_DUETO_TRAFFIC_CONDITION.
-         If there is no request to restart vehicle and vehicle start running,
-          it will exceptionally transition to STATE_RUNNING, STATE_TURNING_LEFT, or STATE_TURNING_RIGHT. */
-      if (isStopState && (velocity_ < engage_threshold_velocity_)) {
-        if (current_service_layer_state_ ==
-          autoware_state_machine_msgs::msg::StateMachine::STATE_STOP_DUETO_TRAFFIC_CONDITION)
-        {
-          return ChangeStateReturnItem::NONE;
-        } else {
-          current_service_layer_state_ =
-            autoware_state_machine_msgs::msg::StateMachine::STATE_STOP_DUETO_TRAFFIC_CONDITION;
-          return ChangeStateReturnItem::TRANSITION;
-        }
-      }
       if (turn_signal_ == tier4_vehicle_msgs::msg::TurnSignal::LEFT) {
         if (autoware_state_machine_msgs::msg::StateMachine::STATE_TURNING_LEFT !=
           current_service_layer_state_)
@@ -1452,7 +1430,6 @@ AutowareStateMachine::AutowareStateMachine(
 
   // Adjustment Parameter
   update_rate = 1.0;
-  engage_threshold_velocity_ = 0.0278 * 3;  // 0.3[km/h]=0.0278 * 3[m/s]
   stop_threshold_velocity_ = 0.0278 * 3;  // 0.3[km/h]=0.0278 * 3[m/s]
   vehicle_state_overtime_ = 0.3;       // /awapi/autoware/get/status is received at 20ms intervals
   autoware_state_overtime_ = 0.3;      // /awapi/vehicle/get/status is received at 20ms intervals

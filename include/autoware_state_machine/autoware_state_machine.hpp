@@ -125,7 +125,6 @@ private:
   bool is_engage_requesting_;
   bool is_engage_accepted_;
   double velocity_;
-  double engage_threshold_velocity_;
   double stop_threshold_velocity_;
   int32_t turn_signal_;
   bool flag_init_state_machine_;
