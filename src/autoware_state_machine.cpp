@@ -1430,7 +1430,6 @@ AutowareStateMachine::AutowareStateMachine(
 
   // Adjustment Parameter
   update_rate = 1.0;
-  engage_threshold_velocity_ = 0.0278 * 3;  // 0.3[km/h]=0.0278 * 3[m/s]
   stop_threshold_velocity_ = 0.0278 * 3;  // 0.3[km/h]=0.0278 * 3[m/s]
   vehicle_state_overtime_ = 0.3;       // /awapi/autoware/get/status is received at 20ms intervals
   autoware_state_overtime_ = 0.3;      // /awapi/vehicle/get/status is received at 20ms intervals
