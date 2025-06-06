@@ -15,35 +15,36 @@
 #ifndef AUTOWARE_STATE_MACHINE__AUTOWARE_STATE_MACHINE_HPP_
 #define AUTOWARE_STATE_MACHINE__AUTOWARE_STATE_MACHINE_HPP_
 
-#include <shared_mutex>
-#include <string>
-#include <map>
-#include <cmath>
-#include <limits>
-#include <utility>
 #include "rclcpp/rclcpp.hpp"
-#include "std_srvs/srv/trigger.hpp"
+#include "tier4_api_utils/tier4_api_utils.hpp"
+
+#include "autoware_state_machine_msgs/msg/state_lock.hpp"
+#include "autoware_state_machine_msgs/msg/state_machine.hpp"
+#include "autoware_state_machine_msgs/msg/state_sound_done.hpp"
 #include "autoware_state_machine_msgs/msg/vehicle_button.hpp"
-#include "tier4_system_msgs/msg/autoware_state.hpp"
+#include "autoware_vehicle_msgs/msg/control_mode_report.hpp"
+#include "go_interface_msgs/msg/change_lock_flg.hpp"
+#include "go_interface_msgs/msg/vehicle_status.hpp"
+#include "std_srvs/srv/trigger.hpp"
 #include "tier4_api_msgs/msg/awapi_autoware_status.hpp"
 #include "tier4_api_msgs/msg/awapi_vehicle_status.hpp"
-#include "tier4_api_utils/tier4_api_utils.hpp"
 #include "tier4_external_api_msgs/srv/engage.hpp"
 #include "tier4_external_api_msgs/srv/set_operator.hpp"
 #include "tier4_planning_msgs/msg/stop_reason_array.hpp"
+#include "tier4_system_msgs/msg/autoware_state.hpp"
 #include "tier4_vehicle_msgs/msg/turn_signal.hpp"
-#include "tier4_vehicle_msgs/msg/control_mode.hpp"
-#include "autoware_state_machine_msgs/msg/state_machine.hpp"
-#include "autoware_state_machine_msgs/msg/state_sound_done.hpp"
-#include "autoware_state_machine_msgs/msg/state_lock.hpp"
-#include "go_interface_msgs/msg/vehicle_status.hpp"
-#include "go_interface_msgs/msg/change_lock_flg.hpp"
+
+#include <cmath>
+#include <limits>
+#include <map>
+#include <shared_mutex>
+#include <string>
+#include <utility>
 
 namespace autoware_state_machine
 {
 
-enum class ChangeStateReturnItem
-{
+enum class ChangeStateReturnItem {
   ERROR = 0,
   NONE,
   TRANSITION,
@@ -67,30 +68,25 @@ private:
   // Subscriber
   rclcpp::Subscription<tier4_api_msgs::msg::AwapiAutowareStatus>::SharedPtr
     sub_awapi_autoware_state_;
-  rclcpp::Subscription<tier4_api_msgs::msg::AwapiVehicleStatus>::SharedPtr
-    sub_awapi_vehicle_state_;
+  rclcpp::Subscription<tier4_api_msgs::msg::AwapiVehicleStatus>::SharedPtr sub_awapi_vehicle_state_;
   rclcpp::Subscription<autoware_state_machine_msgs::msg::VehicleButton>::SharedPtr
     sub_calls_delivery_reservation_button_;
   rclcpp::Subscription<autoware_state_machine_msgs::msg::StateSoundDone>::SharedPtr
     sub_engage_sound_done_;
-  rclcpp::Subscription<go_interface_msgs::msg::VehicleStatus>::SharedPtr
-    sub_calls_vehicle_state_;
-  void onAwapiAutowareState(
-    const tier4_api_msgs::msg::AwapiAutowareStatus::ConstSharedPtr msg_ptr);
-  void onAwapiVehicleState(
-    const tier4_api_msgs::msg::AwapiVehicleStatus::ConstSharedPtr msg_ptr);
+  rclcpp::Subscription<go_interface_msgs::msg::VehicleStatus>::SharedPtr sub_calls_vehicle_state_;
+  void onAwapiAutowareState(const tier4_api_msgs::msg::AwapiAutowareStatus::ConstSharedPtr msg_ptr);
+  void onAwapiVehicleState(const tier4_api_msgs::msg::AwapiVehicleStatus::ConstSharedPtr msg_ptr);
   void onCallsDeliveryReservationButton(
     const autoware_state_machine_msgs::msg::VehicleButton::ConstSharedPtr msg_ptr);
   void onStateSoundDone(
     const autoware_state_machine_msgs::msg::StateSoundDone::ConstSharedPtr msg_ptr);
-  void onCallsVehicleState(
-    const go_interface_msgs::msg::VehicleStatus::ConstSharedPtr msg_ptr);
+  void onCallsVehicleState(const go_interface_msgs::msg::VehicleStatus::ConstSharedPtr msg_ptr);
 
   // Publisher
   rclcpp::Publisher<autoware_state_machine_msgs::msg::StateMachine>::SharedPtr pub_state_;
-  rclcpp::Publisher<autoware_state_machine_msgs::msg::StateLock>::SharedPtr pub_delivery_reservation_state_;
-  rclcpp::Publisher<go_interface_msgs::msg::ChangeLockFlg>::SharedPtr
-    pub_calls_req_change_lock_;
+  rclcpp::Publisher<autoware_state_machine_msgs::msg::StateLock>::SharedPtr
+    pub_delivery_reservation_state_;
+  rclcpp::Publisher<go_interface_msgs::msg::ChangeLockFlg>::SharedPtr pub_calls_req_change_lock_;
 
   // Service
   rclcpp::Service<tier4_external_api_msgs::srv::Engage>::SharedPtr srv_engage_;

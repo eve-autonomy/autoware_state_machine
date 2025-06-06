@@ -12,16 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License
 
+#include "autoware_state_machine/autoware_state_machine.hpp"
+
 #include <limits>
 #include <memory>
-#include <utility>
 #include <queue>
-#include "autoware_state_machine/autoware_state_machine.hpp"
+#include <utility>
 
 namespace autoware_state_machine
 {
 
-#define DEBUG_THROTTLE_TIME  5000  // ms
+#define DEBUG_THROTTLE_TIME 5000  // ms
 
 void AutowareStateMachine::onAwapiAutowareState(
   const tier4_api_msgs::msg::AwapiAutowareStatus::ConstSharedPtr msg_ptr)
@@ -48,7 +49,8 @@ std::pair<std::string, double> AutowareStateMachine::getNearestStopReasonWithPri
     double distance;
     int8_t priority;
     explicit ReasonInfo(
-      const std::string & a_reason, const double a_distance, const int8_t a_priority) {
+      const std::string & a_reason, const double a_distance, const int8_t a_priority)
+    {
       reason = a_reason;
       distance = a_distance;
       priority = a_priority;
@@ -56,41 +58,39 @@ std::pair<std::string, double> AutowareStateMachine::getNearestStopReasonWithPri
   };
 
   // 優先度付与関数
-  auto getPriority =
-    [](const std::string & stop_reason) -> int8_t {
-      if (stop_reason == StopReason::SURROUND_OBSTACLE_CHECK) {
-        return 1;
-      } else if (stop_reason == StopReason::OBSTACLE_STOP) {
-        return 2;
-      } else if (stop_reason == StopReason::DETECTION_AREA) {
-        return 3;
-      } else if (stop_reason == StopReason::VIRTUAL_TRAFFIC_LIGHT) {
-        return 4;
-      } else if (stop_reason == StopReason::STOP_LINE) {
-        return 5;
-      } else {
-        return 10;
-      }
-    };
+  auto getPriority = [](const std::string & stop_reason) -> int8_t {
+    if (stop_reason == StopReason::SURROUND_OBSTACLE_CHECK) {
+      return 1;
+    } else if (stop_reason == StopReason::OBSTACLE_STOP) {
+      return 2;
+    } else if (stop_reason == StopReason::DETECTION_AREA) {
+      return 3;
+    } else if (stop_reason == StopReason::VIRTUAL_TRAFFIC_LIGHT) {
+      return 4;
+    } else if (stop_reason == StopReason::STOP_LINE) {
+      return 5;
+    } else {
+      return 10;
+    }
+  };
 
   // 比較関数
-  auto compare =
-    [](const ReasonInfo & a, const ReasonInfo & b) -> bool {
-      // 優先度
-      // 1. 距離がどちらともほぼ0m（1e-3（1mm）より小さい）場合
-      //    a. SURROUND_OBSTACLE_CHECK
-      //    b. OBSTACLE_STOP
-      //    c. DETECTION_AREA
-      //    d. VIRTUAL_TRAFFIC_LIGHT
-      //    e. STOP_LINE
-      // 2. 距離が近い
-      const double ERROR = 1e-3;
-      if (a.distance < ERROR && b.distance < ERROR) {
-        return a.priority > b.priority;
-      } else {
-        return a.distance > b.distance;
-      }
-    };
+  auto compare = [](const ReasonInfo & a, const ReasonInfo & b) -> bool {
+    // 優先度
+    // 1. 距離がどちらともほぼ0m（1e-3（1mm）より小さい）場合
+    //    a. SURROUND_OBSTACLE_CHECK
+    //    b. OBSTACLE_STOP
+    //    c. DETECTION_AREA
+    //    d. VIRTUAL_TRAFFIC_LIGHT
+    //    e. STOP_LINE
+    // 2. 距離が近い
+    const double ERROR = 1e-3;
+    if (a.distance < ERROR && b.distance < ERROR) {
+      return a.priority > b.priority;
+    } else {
+      return a.distance > b.distance;
+    }
+  };
 
   std::priority_queue<ReasonInfo, std::vector<ReasonInfo>, decltype(compare)> que{compare};
 
@@ -103,8 +103,8 @@ std::pair<std::string, double> AutowareStateMachine::getNearestStopReasonWithPri
       }
     }
   }
-  const auto res = !que.empty() ? std::make_pair(que.top().reason, que.top().distance)
-                      : std::make_pair("", 0.0);
+  const auto res =
+    !que.empty() ? std::make_pair(que.top().reason, que.top().distance) : std::make_pair("", 0.0);
   return res;
 }
 
@@ -126,15 +126,12 @@ void AutowareStateMachine::execEngageProcess(
   const tier4_external_api_msgs::srv::Engage::Response::SharedPtr response)
 {
   RCLCPP_DEBUG_THROTTLE(
-    this->get_logger(),
-    *this->get_clock(), DEBUG_THROTTLE_TIME,
-    "[autoware_state_machine] Engage Request Is %d ",
-    request->engage);
+    this->get_logger(), *this->get_clock(), DEBUG_THROTTLE_TIME,
+    "[autoware_state_machine] Engage Request Is %d ", request->engage);
 
   if (current_control_layer_state_ == autoware_state_machine_msgs::msg::StateMachine::MANUAL) {
     RCLCPP_WARN_THROTTLE(
-      this->get_logger(),
-      *this->get_clock(), DEBUG_THROTTLE_TIME,
+      this->get_logger(), *this->get_clock(), DEBUG_THROTTLE_TIME,
       "[autoware_state_machine] Engage Request Is Not Ready.");
     response->status = tier4_api_utils::response_error("It is not ready to engage.");
     return;
@@ -142,27 +139,24 @@ void AutowareStateMachine::execEngageProcess(
 
   const auto is_engage_ready_state =
     (current_service_layer_state_ ==
-    autoware_state_machine_msgs::msg::StateMachine::STATE_WAITING_ENGAGE_INSTRUCTION) ||
+     autoware_state_machine_msgs::msg::StateMachine::STATE_WAITING_ENGAGE_INSTRUCTION) ||
     (current_service_layer_state_ ==
-    autoware_state_machine_msgs::msg::StateMachine::STATE_WAITING_CALL_PERMISSION);
+     autoware_state_machine_msgs::msg::StateMachine::STATE_WAITING_CALL_PERMISSION);
 
   if (!is_engage_ready_state) {
     // Do not make error notification
     RCLCPP_WARN_THROTTLE(
-      this->get_logger(),
-      *this->get_clock(), DEBUG_THROTTLE_TIME,
-      "[autoware_state_machine] Preceding Engage Request %d ",
-      current_service_layer_state_);
+      this->get_logger(), *this->get_clock(), DEBUG_THROTTLE_TIME,
+      "[autoware_state_machine] Preceding Engage Request %d ", current_service_layer_state_);
     response->status = tier4_api_utils::response_error("It is not ready to engage.");
     return;
   }
 
-  if (current_delivery_reservation_state_ ==
-    autoware_state_machine_msgs::msg::StateLock::STATE_VERIFICATION)
-  {
+  if (
+    current_delivery_reservation_state_ ==
+    autoware_state_machine_msgs::msg::StateLock::STATE_VERIFICATION) {
     RCLCPP_DEBUG_THROTTLE(
-      this->get_logger(),
-      *this->get_clock(), DEBUG_THROTTLE_TIME,
+      this->get_logger(), *this->get_clock(), DEBUG_THROTTLE_TIME,
       "[autoware_state_machine] Under Verification of Lock Button ");
     response->status = tier4_api_utils::response_error("It is not ready to engage.");
     return;
@@ -170,8 +164,7 @@ void AutowareStateMachine::execEngageProcess(
 
   // Provisional support
   // Set operator to AUTONOMOUS and set "/vehicle/engage" to True internally.
-  auto operator_req =
-    std::make_shared<tier4_external_api_msgs::srv::SetOperator::Request>();
+  auto operator_req = std::make_shared<tier4_external_api_msgs::srv::SetOperator::Request>();
   operator_req->mode.mode = tier4_external_api_msgs::msg::Operator::AUTONOMOUS;
   auto operator_future = cli_set_operator_->async_send_request(operator_req);
   if (!tier4_api_utils::is_success(operator_future.get()->status)) {
@@ -191,23 +184,21 @@ void AutowareStateMachine::execEngageProcess(
 
 void AutowareStateMachine::setRequestStartAPI(
   const std_srvs::srv::Trigger::Request::SharedPtr request,
-  const std_srvs::srv::Trigger::Response::SharedPtr response
-)
+  const std_srvs::srv::Trigger::Response::SharedPtr response)
 {
   /* The voice guidance at the time of engage is done in execEngageProcess function,
       so there is no need to do it there.
     Treats the state as ready to engage and returns true. */
-  if (current_service_layer_state_ ==
-    autoware_state_machine_msgs::msg::StateMachine::STATE_INSTRUCT_ENGAGE)
-  {
+  if (
+    current_service_layer_state_ ==
+    autoware_state_machine_msgs::msg::StateMachine::STATE_INSTRUCT_ENGAGE) {
     response->success = true;
     return;
   }
 
   if (current_control_layer_state_ == autoware_state_machine_msgs::msg::StateMachine::MANUAL) {
     RCLCPP_WARN_THROTTLE(
-      this->get_logger(),
-      *this->get_clock(), DEBUG_THROTTLE_TIME,
+      this->get_logger(), *this->get_clock(), DEBUG_THROTTLE_TIME,
       "[autoware_state_machine] Start API Is Not Ready ");
     response->success = false;
     return;
@@ -215,14 +206,13 @@ void AutowareStateMachine::setRequestStartAPI(
 
   const auto is_running_state =
     (current_service_layer_state_ >=
-    autoware_state_machine_msgs::msg::StateMachine::STATE_RUNNING) &&
+     autoware_state_machine_msgs::msg::StateMachine::STATE_RUNNING) &&
     (current_service_layer_state_ <
-    autoware_state_machine_msgs::msg::StateMachine::STATE_ARRIVED_GOAL);
+     autoware_state_machine_msgs::msg::StateMachine::STATE_ARRIVED_GOAL);
 
   if (!is_running_state) {
     RCLCPP_WARN_THROTTLE(
-      this->get_logger(),
-      *this->get_clock(), DEBUG_THROTTLE_TIME,
+      this->get_logger(), *this->get_clock(), DEBUG_THROTTLE_TIME,
       "[autoware_state_machine] Start API Is Not Ready ");
     response->success = false;
     return;
@@ -230,15 +220,14 @@ void AutowareStateMachine::setRequestStartAPI(
 
   const auto is_exception_state =
     (current_service_layer_state_ ==
-    autoware_state_machine_msgs::msg::StateMachine::STATE_INFORM_ENGAGE) ||
+     autoware_state_machine_msgs::msg::StateMachine::STATE_INFORM_ENGAGE) ||
     (current_service_layer_state_ ==
-    autoware_state_machine_msgs::msg::StateMachine::STATE_INFORM_RESTART);
+     autoware_state_machine_msgs::msg::StateMachine::STATE_INFORM_RESTART);
 
   // Remove exceptions that fall within the scope of RunningState.
   if (is_exception_state) {
     RCLCPP_WARN_THROTTLE(
-      this->get_logger(),
-      *this->get_clock(), DEBUG_THROTTLE_TIME,
+      this->get_logger(), *this->get_clock(), DEBUG_THROTTLE_TIME,
       "[autoware_state_machine] Start API Is Not Ready ");
     response->success = false;
     return;
@@ -252,26 +241,22 @@ void AutowareStateMachine::onCallsDeliveryReservationButton(
   const autoware_state_machine_msgs::msg::VehicleButton::ConstSharedPtr msg_ptr)
 {
   RCLCPP_DEBUG_THROTTLE(
-    this->get_logger(),
-    *this->get_clock(), DEBUG_THROTTLE_TIME,
-    "[autoware_state_machine] CallsDeliveryReservationButton %d ",
-    msg_ptr->data);
+    this->get_logger(), *this->get_clock(), DEBUG_THROTTLE_TIME,
+    "[autoware_state_machine] CallsDeliveryReservationButton %d ", msg_ptr->data);
 
   if (flag_calls_active_schedule_exists_) {
     RCLCPP_DEBUG_THROTTLE(
-      this->get_logger(),
-      *this->get_clock(), DEBUG_THROTTLE_TIME,
+      this->get_logger(), *this->get_clock(), DEBUG_THROTTLE_TIME,
       "[autoware_state_machine] Active schedule exists ");
     return;
   }
 
   // Do not accept processing during verification
-  if (current_delivery_reservation_state_ ==
-    autoware_state_machine_msgs::msg::StateLock::STATE_VERIFICATION)
-  {
+  if (
+    current_delivery_reservation_state_ ==
+    autoware_state_machine_msgs::msg::StateLock::STATE_VERIFICATION) {
     RCLCPP_DEBUG_THROTTLE(
-      this->get_logger(),
-      *this->get_clock(), DEBUG_THROTTLE_TIME,
+      this->get_logger(), *this->get_clock(), DEBUG_THROTTLE_TIME,
       "[autoware_state_machine] Under Verification ");
     return;
   }
@@ -280,9 +265,11 @@ void AutowareStateMachine::onCallsDeliveryReservationButton(
   change_lock.stamp = this->now();
   /* If the lock status is OFF,
       set it to verification status and ask the web server if it can be turned ON. */
-  if (current_delivery_reservation_state_ == autoware_state_machine_msgs::msg::StateLock::STATE_OFF) {
+  if (
+    current_delivery_reservation_state_ == autoware_state_machine_msgs::msg::StateLock::STATE_OFF) {
     delivery_reservation_verification_time_ = this->now();
-    current_delivery_reservation_state_ = autoware_state_machine_msgs::msg::StateLock::STATE_VERIFICATION;
+    current_delivery_reservation_state_ =
+      autoware_state_machine_msgs::msg::StateLock::STATE_VERIFICATION;
     change_lock.flg = true;
 
     // Set the LED to blinking.
@@ -303,20 +290,17 @@ void AutowareStateMachine::onStateSoundDone(
   if (msg_ptr->done == false) {
     // Do not make error notification
     RCLCPP_WARN_THROTTLE(
-      this->get_logger(),
-      *this->get_clock(), DEBUG_THROTTLE_TIME,
+      this->get_logger(), *this->get_clock(), DEBUG_THROTTLE_TIME,
       "[autoware_state_machine] Sound Done False");
     return;
   }
   if (current_service_layer_state_ != msg_ptr->state) {
     // Do not make error notification
     RCLCPP_WARN_THROTTLE(
-      this->get_logger(),
-      *this->get_clock(), DEBUG_THROTTLE_TIME,
+      this->get_logger(), *this->get_clock(), DEBUG_THROTTLE_TIME,
       "[autoware_state_machine] Sound Done Bad Timing "
       "service_layer_state: %u, control_layer_state %u",
-      current_service_layer_state_,
-      current_control_layer_state_);
+      current_service_layer_state_, current_control_layer_state_);
     if (sound_done_param_.count(msg_ptr->state) != 0) {
       /* false safe */
       sound_done_param_[msg_ptr->state].done_flag = false;
@@ -326,10 +310,8 @@ void AutowareStateMachine::onStateSoundDone(
 
   if (sound_done_param_.count(msg_ptr->state) != 0) {
     RCLCPP_DEBUG_THROTTLE(
-      this->get_logger(),
-      *this->get_clock(), DEBUG_THROTTLE_TIME,
-      "[autoware_state_machine] Sound Done %d, %d ", msg_ptr->state,
-      msg_ptr->done);
+      this->get_logger(), *this->get_clock(), DEBUG_THROTTLE_TIME,
+      "[autoware_state_machine] Sound Done %d, %d ", msg_ptr->state, msg_ptr->done);
     sound_done_param_[msg_ptr->state].done_flag = true;
     ChangeState();
   }
@@ -341,9 +323,10 @@ void AutowareStateMachine::onCallsVehicleState(
   bool change_lock_state = false;
 
   // lock state off or lock state verification
-  if (current_delivery_reservation_state_ == autoware_state_machine_msgs::msg::StateLock::STATE_OFF ||
-    (current_delivery_reservation_state_ == autoware_state_machine_msgs::msg::StateLock::STATE_VERIFICATION))
-  {
+  if (
+    current_delivery_reservation_state_ == autoware_state_machine_msgs::msg::StateLock::STATE_OFF ||
+    (current_delivery_reservation_state_ ==
+     autoware_state_machine_msgs::msg::StateLock::STATE_VERIFICATION)) {
     if (msg_ptr->lock_flg == true) {
       current_delivery_reservation_state_ = autoware_state_machine_msgs::msg::StateLock::STATE_ON;
       change_lock_state = true;
@@ -364,8 +347,9 @@ void AutowareStateMachine::onCallsVehicleState(
 
   /* The voice flag only has meaning for the transition from False to True.
     When the voice flag is True,
-      the transition from "STATE_WAITING_ENGAGE_INSTRUCTION" to "STATE_WAITING_CALL_PERMISSION" is possible.
-    The voice flag is set to false once when the transition is made to "STATE_WAITING_ENGAGE_INSTRUCTION". */
+      the transition from "STATE_WAITING_ENGAGE_INSTRUCTION" to "STATE_WAITING_CALL_PERMISSION" is
+    possible. The voice flag is set to false once when the transition is made to
+    "STATE_WAITING_ENGAGE_INSTRUCTION". */
   if (flag_calls_vehicle_voice_ != msg_ptr->voice_flg) {
     flag_calls_vehicle_voice_ = msg_ptr->voice_flg;
   }
@@ -381,32 +365,30 @@ void AutowareStateMachine::onTimer()
 {
   const auto current_time = this->now();
 
-  if ( (current_time - pre_vehicle_state_recv_time_).seconds() > vehicle_state_overtime_) {
+  if ((current_time - pre_vehicle_state_recv_time_).seconds() > vehicle_state_overtime_) {
     /* "/awapi/vehicle/get/status" topic that should have been sent regularly does not come */
     // Make error notification
     RCLCPP_ERROR_THROTTLE(
-      this->get_logger(),
-      *this->get_clock(), DEBUG_THROTTLE_TIME,
+      this->get_logger(), *this->get_clock(), DEBUG_THROTTLE_TIME,
       "[autoware_state_machine] Vehicle State Missing %f ",
       (current_time - pre_vehicle_state_recv_time_).seconds());
   }
 
-  if ( (current_time - pre_autoware_state_recv_time_).seconds() > autoware_state_overtime_) {
+  if ((current_time - pre_autoware_state_recv_time_).seconds() > autoware_state_overtime_) {
     /* "/awapi/autoware/get/status" topic that should have been sent regularly does not come */
     // Make error notification
     RCLCPP_ERROR_THROTTLE(
-      this->get_logger(),
-      *this->get_clock(), DEBUG_THROTTLE_TIME,
+      this->get_logger(), *this->get_clock(), DEBUG_THROTTLE_TIME,
       "[autoware_state_machine] Autoware State Missing %f ",
       (current_time - pre_autoware_state_recv_time_).seconds());
   }
 
-  if (current_delivery_reservation_state_ ==
-    autoware_state_machine_msgs::msg::StateLock::STATE_VERIFICATION)
-  {
-    if ( (current_time - delivery_reservation_verification_time_).seconds() >
-      delivery_reservation_verification_overtime_)
-    {
+  if (
+    current_delivery_reservation_state_ ==
+    autoware_state_machine_msgs::msg::StateLock::STATE_VERIFICATION) {
+    if (
+      (current_time - delivery_reservation_verification_time_).seconds() >
+      delivery_reservation_verification_overtime_) {
       /* If the verification process continues for a long time,
           return the status to OFF. */
       current_delivery_reservation_state_ = autoware_state_machine_msgs::msg::StateLock::STATE_OFF;
@@ -422,52 +404,50 @@ void AutowareStateMachine::onTimer()
     if (sound_done_param_[current_service_layer_state_].done_flag != true) {
       rclcpp::Time current_service_layer_state_start_time(
         sound_done_param_[current_service_layer_state_].sec,
-        sound_done_param_[current_service_layer_state_].nsec,
-        RCL_ROS_TIME);
-      if ( (current_time - current_service_layer_state_start_time).seconds() >
-        sound_done_param_[current_service_layer_state_].done_overtime)
-      {
+        sound_done_param_[current_service_layer_state_].nsec, RCL_ROS_TIME);
+      if (
+        (current_time - current_service_layer_state_start_time).seconds() >
+        sound_done_param_[current_service_layer_state_].done_overtime) {
         autoware_state_machine_msgs::msg::StateMachine pub;
 
         // Do not make error notification
         RCLCPP_WARN_THROTTLE(
-          this->get_logger(),
-          *this->get_clock(), DEBUG_THROTTLE_TIME,
-          "[autoware_state_machine] Sound Donee Missing %d %f ",
-          current_service_layer_state_,
+          this->get_logger(), *this->get_clock(), DEBUG_THROTTLE_TIME,
+          "[autoware_state_machine] Sound Donee Missing %d %f ", current_service_layer_state_,
           (current_time - current_service_layer_state_start_time).seconds());
-/*
-        Publish audio playback again
-        sound_done_param_[current_service_layer_state_].sec = current_time.sec;
-        sound_done_param_[current_service_layer_state_].nsec = current_time.nsec;
-        pub.header.stamp = current_time;
-        pub.state = current_service_layer_state_;
-        pub_state_->publish(pub);
-*/
+        /*
+                Publish audio playback again
+                sound_done_param_[current_service_layer_state_].sec = current_time.sec;
+                sound_done_param_[current_service_layer_state_].nsec = current_time.nsec;
+                pub.header.stamp = current_time;
+                pub.state = current_service_layer_state_;
+                pub_state_->publish(pub);
+        */
       }
     }
   }
 
   /* Since there is a possibility that there is no regular Topic reception,
       call it with this timer */
-  if ( (current_service_layer_state_ ==
-    autoware_state_machine_msgs::msg::StateMachine::STATE_UNDEFINED) ||
+  if (
     (current_service_layer_state_ ==
-    autoware_state_machine_msgs::msg::StateMachine::STATE_CHECK_NODE_ALIVE) ||
+     autoware_state_machine_msgs::msg::StateMachine::STATE_UNDEFINED) ||
     (current_service_layer_state_ ==
-    autoware_state_machine_msgs::msg::StateMachine::STATE_EMERGENCY_STOP) )
-  {
+     autoware_state_machine_msgs::msg::StateMachine::STATE_CHECK_NODE_ALIVE) ||
+    (current_service_layer_state_ ==
+     autoware_state_machine_msgs::msg::StateMachine::STATE_EMERGENCY_STOP)) {
     ChangeState();
   }
 
   /* Currently, there is no way to directly check the AUTO / MANUAL status on the vehicle side.
      Even if the vehicle switch is turned off for automatic driving, the engage request is accepted.
-     However, since the "engage service" in the MANUAL state is ignored, the vehicle does not actually depart.
-     In the future, the state will be returned after a timeout so that the engage request after the vehicle switch is turned on for automatic driving can be accepted. */
-  if (current_service_layer_state_ ==
-    autoware_state_machine_msgs::msg::StateMachine::STATE_INSTRUCT_ENGAGE)
-  {
-    if ( (current_time - engage_wait_time_).seconds() > engage_wait_overtime_) {
+     However, since the "engage service" in the MANUAL state is ignored, the vehicle does not
+     actually depart. In the future, the state will be returned after a timeout so that the engage
+     request after the vehicle switch is turned on for automatic driving can be accepted. */
+  if (
+    current_service_layer_state_ ==
+    autoware_state_machine_msgs::msg::StateMachine::STATE_INSTRUCT_ENGAGE) {
+    if ((current_time - engage_wait_time_).seconds() > engage_wait_overtime_) {
       if (cur_autoware_state_ == tier4_system_msgs::msg::AutowareState::WAITING_FOR_ENGAGE) {
         cur_autoware_state_ = tier4_system_msgs::msg::AutowareState::PLANNING;
         ChangeState();
@@ -477,9 +457,9 @@ void AutowareStateMachine::onTimer()
 
   const auto is_now_engage_playing =
     (current_service_layer_state_ ==
-    autoware_state_machine_msgs::msg::StateMachine::STATE_INFORM_ENGAGE) ||
+     autoware_state_machine_msgs::msg::StateMachine::STATE_INFORM_ENGAGE) ||
     (current_service_layer_state_ ==
-    autoware_state_machine_msgs::msg::StateMachine::STATE_INFORM_RESTART);
+     autoware_state_machine_msgs::msg::StateMachine::STATE_INFORM_RESTART);
 
   /* If engage is requested and is not yet playing, then execute ChangeState function. */
   auto [is_request, _] = getEngageProcess();
@@ -487,7 +467,6 @@ void AutowareStateMachine::onTimer()
     ChangeState();
   }
 }
-
 
 void AutowareStateMachine::ChangeState(void)
 {
@@ -501,15 +480,12 @@ void AutowareStateMachine::ChangeState(void)
       /* At the first Autoware startup after the power is turned on. Force a transition. */
       // Normal  Pattern
       flag_init_state_machine_ = false;
-      sound_done_param_[
-        autoware_state_machine_msgs::msg::StateMachine::STATE_CHECK_NODE_ALIVE].done_flag =
-        false;
-      sound_done_param_[
-        autoware_state_machine_msgs::msg::StateMachine::STATE_CHECK_NODE_ALIVE].sec =
-        wait_done_time.sec;
-      sound_done_param_[
-        autoware_state_machine_msgs::msg::StateMachine::STATE_CHECK_NODE_ALIVE].nsec =
-        wait_done_time.nanosec;
+      sound_done_param_[autoware_state_machine_msgs::msg::StateMachine::STATE_CHECK_NODE_ALIVE]
+        .done_flag = false;
+      sound_done_param_[autoware_state_machine_msgs::msg::StateMachine::STATE_CHECK_NODE_ALIVE]
+        .sec = wait_done_time.sec;
+      sound_done_param_[autoware_state_machine_msgs::msg::StateMachine::STATE_CHECK_NODE_ALIVE]
+        .nsec = wait_done_time.nanosec;
       current_service_layer_state_ =
         autoware_state_machine_msgs::msg::StateMachine::STATE_CHECK_NODE_ALIVE;
       service_layer_ret = ChangeStateReturnItem::TRANSITION;
@@ -588,16 +564,15 @@ void AutowareStateMachine::ChangeState(void)
 
   control_layer_ret = changeControlLayerState();
 
-  if (service_layer_ret == ChangeStateReturnItem::TRANSITION ||
-    control_layer_ret == ChangeStateReturnItem::TRANSITION)
-  {
+  if (
+    service_layer_ret == ChangeStateReturnItem::TRANSITION ||
+    control_layer_ret == ChangeStateReturnItem::TRANSITION) {
     autoware_state_machine_msgs::msg::StateMachine pub;
 
     RCLCPP_INFO(
       this->get_logger(),
       "[autoware_state_machine] Change service_layer_state %d, control_layer_state %d",
-      current_service_layer_state_,
-      current_control_layer_state_);
+      current_service_layer_state_, current_control_layer_state_);
     pub.stamp = this->now();
     pub.service_layer_state = current_service_layer_state_;
     pub.control_layer_state = current_control_layer_state_;
@@ -605,9 +580,8 @@ void AutowareStateMachine::ChangeState(void)
   } else if (service_layer_ret == ChangeStateReturnItem::ERROR) {
     // Make error notification
     RCLCPP_ERROR_STREAM(
-      this->get_logger(),
-      "[autoware_state_machine] Detect Error : " <<
-        current_service_layer_state_ << " : " << cur_autoware_state_);
+      this->get_logger(), "[autoware_state_machine] Detect Error : "
+                            << current_service_layer_state_ << " : " << cur_autoware_state_);
   }
 }
 
@@ -615,17 +589,15 @@ ChangeStateReturnItem AutowareStateMachine::changeState4NodeAlive(void)
 {
   // No transition  Pattern
   if (flag_init_state_machine_ == false) {
-    if (sound_done_param_[
-        autoware_state_machine_msgs::msg::StateMachine::STATE_CHECK_NODE_ALIVE].done_flag ==
-      false)
-    {
+    if (
+      sound_done_param_[autoware_state_machine_msgs::msg::StateMachine::STATE_CHECK_NODE_ALIVE]
+        .done_flag == false) {
       return ChangeStateReturnItem::NONE;
     }
     /* Audio playback completed */
     // Normal  Pattern
-    sound_done_param_[
-      autoware_state_machine_msgs::msg::StateMachine::STATE_CHECK_NODE_ALIVE].done_flag =
-      false;
+    sound_done_param_[autoware_state_machine_msgs::msg::StateMachine::STATE_CHECK_NODE_ALIVE]
+      .done_flag = false;
     flag_init_state_machine_ = true;
   }
 
@@ -637,9 +609,9 @@ ChangeStateReturnItem AutowareStateMachine::changeState4NodeAlive(void)
   }
 
   // Tolerance Pattern
-  if ( (cur_autoware_state_ == tier4_system_msgs::msg::AutowareState::WAITING_FOR_ROUTE) ||
-    (cur_autoware_state_ == tier4_system_msgs::msg::AutowareState::PLANNING) )
-  {
+  if (
+    (cur_autoware_state_ == tier4_system_msgs::msg::AutowareState::WAITING_FOR_ROUTE) ||
+    (cur_autoware_state_ == tier4_system_msgs::msg::AutowareState::PLANNING)) {
     current_service_layer_state_ =
       autoware_state_machine_msgs::msg::StateMachine::STATE_DURING_RECEIVE_ROUTE;
     return ChangeStateReturnItem::TRANSITION;
@@ -676,9 +648,9 @@ ChangeStateReturnItem AutowareStateMachine::changeState4DuringWakeup(void)
   }
 
   // Normal  Pattern
-  if ( (cur_autoware_state_ == tier4_system_msgs::msg::AutowareState::WAITING_FOR_ROUTE) ||
-    (cur_autoware_state_ == tier4_system_msgs::msg::AutowareState::PLANNING) )
-  {
+  if (
+    (cur_autoware_state_ == tier4_system_msgs::msg::AutowareState::WAITING_FOR_ROUTE) ||
+    (cur_autoware_state_ == tier4_system_msgs::msg::AutowareState::PLANNING)) {
     current_service_layer_state_ =
       autoware_state_machine_msgs::msg::StateMachine::STATE_DURING_RECEIVE_ROUTE;
     return ChangeStateReturnItem::TRANSITION;
@@ -707,9 +679,9 @@ ChangeStateReturnItem AutowareStateMachine::changeState4DuringReceiveRoute(void)
   }
 
   // No transition  Pattern
-  if ( (cur_autoware_state_ == tier4_system_msgs::msg::AutowareState::WAITING_FOR_ROUTE) ||
-    (cur_autoware_state_ == tier4_system_msgs::msg::AutowareState::PLANNING) )
-  {
+  if (
+    (cur_autoware_state_ == tier4_system_msgs::msg::AutowareState::WAITING_FOR_ROUTE) ||
+    (cur_autoware_state_ == tier4_system_msgs::msg::AutowareState::PLANNING)) {
     return ChangeStateReturnItem::NONE;
   }
 
@@ -743,17 +715,17 @@ ChangeStateReturnItem AutowareStateMachine::changeState4WaintingEngageInstructio
     return ChangeStateReturnItem::TRANSITION;
   }
 
-  if ( (cur_autoware_state_ == tier4_system_msgs::msg::AutowareState::WAITING_FOR_ENGAGE) ||
-    (cur_autoware_state_ == tier4_system_msgs::msg::AutowareState::DRIVING) )
-  {
+  if (
+    (cur_autoware_state_ == tier4_system_msgs::msg::AutowareState::WAITING_FOR_ENGAGE) ||
+    (cur_autoware_state_ == tier4_system_msgs::msg::AutowareState::DRIVING)) {
     builtin_interfaces::msg::Time wait_done_time = this->now();
 
-    if (current_service_layer_state_ ==
-      autoware_state_machine_msgs::msg::StateMachine::STATE_WAITING_ENGAGE_INSTRUCTION)
-    {
-      if (flag_calls_vehicle_voice_ &&
-        (current_delivery_reservation_state_ == autoware_state_machine_msgs::msg::StateLock::STATE_ON))
-      {
+    if (
+      current_service_layer_state_ ==
+      autoware_state_machine_msgs::msg::StateMachine::STATE_WAITING_ENGAGE_INSTRUCTION) {
+      if (
+        flag_calls_vehicle_voice_ && (current_delivery_reservation_state_ ==
+                                      autoware_state_machine_msgs::msg::StateLock::STATE_ON)) {
         /* Once move to "STATE_WAITING_CALL_PERMISSION",
             can't go back to "STATE_WAITING_ENGAGE_INSTRUCTION". */
         current_service_layer_state_ =
@@ -764,23 +736,19 @@ ChangeStateReturnItem AutowareStateMachine::changeState4WaintingEngageInstructio
 
     // No transition  Pattern
     auto [is_request, _] = getEngageProcess();
-    if ((is_request == false) ||
-      (current_delivery_reservation_state_ ==
-      autoware_state_machine_msgs::msg::StateLock::STATE_VERIFICATION))
-    {
+    if (
+      (is_request == false) || (current_delivery_reservation_state_ ==
+                                autoware_state_machine_msgs::msg::StateLock::STATE_VERIFICATION)) {
       return ChangeStateReturnItem::NONE;
     }
 
     // Normal  Pattern
     flag_calls_vehicle_voice_ = false;
-    sound_done_param_[
-      autoware_state_machine_msgs::msg::StateMachine::STATE_INFORM_ENGAGE].done_flag =
-      false;
-    sound_done_param_[
-      autoware_state_machine_msgs::msg::StateMachine::STATE_INFORM_ENGAGE].sec =
+    sound_done_param_[autoware_state_machine_msgs::msg::StateMachine::STATE_INFORM_ENGAGE]
+      .done_flag = false;
+    sound_done_param_[autoware_state_machine_msgs::msg::StateMachine::STATE_INFORM_ENGAGE].sec =
       wait_done_time.sec;
-    sound_done_param_[
-      autoware_state_machine_msgs::msg::StateMachine::STATE_INFORM_ENGAGE].nsec =
+    sound_done_param_[autoware_state_machine_msgs::msg::StateMachine::STATE_INFORM_ENGAGE].nsec =
       wait_done_time.nanosec;
     current_service_layer_state_ =
       autoware_state_machine_msgs::msg::StateMachine::STATE_INFORM_ENGAGE;
@@ -789,9 +757,9 @@ ChangeStateReturnItem AutowareStateMachine::changeState4WaintingEngageInstructio
 
   // Tolerance Pattern
   setEngageProcess(false, false);
-  if ( (cur_autoware_state_ == tier4_system_msgs::msg::AutowareState::WAITING_FOR_ROUTE) ||
-    (cur_autoware_state_ == tier4_system_msgs::msg::AutowareState::PLANNING) )
-  {
+  if (
+    (cur_autoware_state_ == tier4_system_msgs::msg::AutowareState::WAITING_FOR_ROUTE) ||
+    (cur_autoware_state_ == tier4_system_msgs::msg::AutowareState::PLANNING)) {
     current_service_layer_state_ =
       autoware_state_machine_msgs::msg::StateMachine::STATE_DURING_RECEIVE_ROUTE;
     return ChangeStateReturnItem::TRANSITION;
@@ -801,14 +769,11 @@ ChangeStateReturnItem AutowareStateMachine::changeState4WaintingEngageInstructio
     builtin_interfaces::msg::Time wait_done_time = this->now();
 
     flag_arrived_state_machine_ = true;
-    sound_done_param_[
-      autoware_state_machine_msgs::msg::StateMachine::STATE_ARRIVED_GOAL].done_flag =
-      false;
-    sound_done_param_[
-      autoware_state_machine_msgs::msg::StateMachine::STATE_ARRIVED_GOAL].sec =
+    sound_done_param_[autoware_state_machine_msgs::msg::StateMachine::STATE_ARRIVED_GOAL]
+      .done_flag = false;
+    sound_done_param_[autoware_state_machine_msgs::msg::StateMachine::STATE_ARRIVED_GOAL].sec =
       wait_done_time.sec;
-    sound_done_param_[
-      autoware_state_machine_msgs::msg::StateMachine::STATE_ARRIVED_GOAL].nsec =
+    sound_done_param_[autoware_state_machine_msgs::msg::StateMachine::STATE_ARRIVED_GOAL].nsec =
       wait_done_time.nanosec;
     current_service_layer_state_ =
       autoware_state_machine_msgs::msg::StateMachine::STATE_ARRIVED_GOAL;
@@ -835,21 +800,19 @@ ChangeStateReturnItem AutowareStateMachine::changeState4InformEngage(void)
     return ChangeStateReturnItem::TRANSITION;
   }
 
-  if ( (cur_autoware_state_ == tier4_system_msgs::msg::AutowareState::WAITING_FOR_ENGAGE) ||
-    (cur_autoware_state_ == tier4_system_msgs::msg::AutowareState::DRIVING) )
-  {
+  if (
+    (cur_autoware_state_ == tier4_system_msgs::msg::AutowareState::WAITING_FOR_ENGAGE) ||
+    (cur_autoware_state_ == tier4_system_msgs::msg::AutowareState::DRIVING)) {
     // No transition  Pattern
-    if (sound_done_param_[
-        autoware_state_machine_msgs::msg::StateMachine::STATE_INFORM_ENGAGE].done_flag ==
-      false)
-    {
+    if (
+      sound_done_param_[autoware_state_machine_msgs::msg::StateMachine::STATE_INFORM_ENGAGE]
+        .done_flag == false) {
       return ChangeStateReturnItem::NONE;
     }
     /* Audio playback completed */
     // Normal  Pattern
-    sound_done_param_[
-      autoware_state_machine_msgs::msg::StateMachine::STATE_INFORM_ENGAGE].done_flag =
-      false;
+    sound_done_param_[autoware_state_machine_msgs::msg::StateMachine::STATE_INFORM_ENGAGE]
+      .done_flag = false;
 
     current_service_layer_state_ =
       autoware_state_machine_msgs::msg::StateMachine::STATE_INSTRUCT_ENGAGE;
@@ -862,9 +825,9 @@ ChangeStateReturnItem AutowareStateMachine::changeState4InformEngage(void)
 
   // Tolerance Pattern
   setEngageProcess(false, false);
-  if ( (cur_autoware_state_ == tier4_system_msgs::msg::AutowareState::WAITING_FOR_ROUTE) ||
-    (cur_autoware_state_ == tier4_system_msgs::msg::AutowareState::PLANNING) )
-  {
+  if (
+    (cur_autoware_state_ == tier4_system_msgs::msg::AutowareState::WAITING_FOR_ROUTE) ||
+    (cur_autoware_state_ == tier4_system_msgs::msg::AutowareState::PLANNING)) {
     current_service_layer_state_ =
       autoware_state_machine_msgs::msg::StateMachine::STATE_DURING_RECEIVE_ROUTE;
     return ChangeStateReturnItem::TRANSITION;
@@ -873,14 +836,11 @@ ChangeStateReturnItem AutowareStateMachine::changeState4InformEngage(void)
     builtin_interfaces::msg::Time wait_done_time = this->now();
 
     flag_arrived_state_machine_ = true;
-    sound_done_param_[
-      autoware_state_machine_msgs::msg::StateMachine::STATE_ARRIVED_GOAL].done_flag =
-      false;
-    sound_done_param_[
-      autoware_state_machine_msgs::msg::StateMachine::STATE_ARRIVED_GOAL].sec =
+    sound_done_param_[autoware_state_machine_msgs::msg::StateMachine::STATE_ARRIVED_GOAL]
+      .done_flag = false;
+    sound_done_param_[autoware_state_machine_msgs::msg::StateMachine::STATE_ARRIVED_GOAL].sec =
       wait_done_time.sec;
-    sound_done_param_[
-      autoware_state_machine_msgs::msg::StateMachine::STATE_ARRIVED_GOAL].nsec =
+    sound_done_param_[autoware_state_machine_msgs::msg::StateMachine::STATE_ARRIVED_GOAL].nsec =
       wait_done_time.nanosec;
     current_service_layer_state_ =
       autoware_state_machine_msgs::msg::StateMachine::STATE_ARRIVED_GOAL;
@@ -917,14 +877,11 @@ ChangeStateReturnItem AutowareStateMachine::changeState4InstructEngage(void)
     builtin_interfaces::msg::Time wait_done_time = this->now();
 
     flag_arrived_state_machine_ = true;
-    sound_done_param_[
-      autoware_state_machine_msgs::msg::StateMachine::STATE_ARRIVED_GOAL].done_flag =
-      false;
-    sound_done_param_[
-      autoware_state_machine_msgs::msg::StateMachine::STATE_ARRIVED_GOAL].sec =
+    sound_done_param_[autoware_state_machine_msgs::msg::StateMachine::STATE_ARRIVED_GOAL]
+      .done_flag = false;
+    sound_done_param_[autoware_state_machine_msgs::msg::StateMachine::STATE_ARRIVED_GOAL].sec =
       wait_done_time.sec;
-    sound_done_param_[
-      autoware_state_machine_msgs::msg::StateMachine::STATE_ARRIVED_GOAL].nsec =
+    sound_done_param_[autoware_state_machine_msgs::msg::StateMachine::STATE_ARRIVED_GOAL].nsec =
       wait_done_time.nanosec;
     current_service_layer_state_ =
       autoware_state_machine_msgs::msg::StateMachine::STATE_ARRIVED_GOAL;
@@ -938,9 +895,9 @@ ChangeStateReturnItem AutowareStateMachine::changeState4InstructEngage(void)
       autoware_state_machine_msgs::msg::StateMachine::STATE_DURING_WAKEUP;
     return ChangeStateReturnItem::TRANSITION;
   }
-  if ( (cur_autoware_state_ == tier4_system_msgs::msg::AutowareState::WAITING_FOR_ROUTE) ||
-    (cur_autoware_state_ == tier4_system_msgs::msg::AutowareState::PLANNING) )
-  {
+  if (
+    (cur_autoware_state_ == tier4_system_msgs::msg::AutowareState::WAITING_FOR_ROUTE) ||
+    (cur_autoware_state_ == tier4_system_msgs::msg::AutowareState::PLANNING)) {
     setEngageProcess(false, false);
     current_service_layer_state_ =
       autoware_state_machine_msgs::msg::StateMachine::STATE_DURING_RECEIVE_ROUTE;
@@ -949,7 +906,8 @@ ChangeStateReturnItem AutowareStateMachine::changeState4InstructEngage(void)
 
   if (cur_autoware_state_ == tier4_system_msgs::msg::AutowareState::DRIVING) {
     /* Since it is the first engage from approving the engage request,
-       the judgment of whether or not the state has fallen into the pause state in changeState4RunAndStop () is skipped. */
+       the judgment of whether or not the state has fallen into the pause state in
+       changeState4RunAndStop () is skipped. */
     current_service_layer_state_ = autoware_state_machine_msgs::msg::StateMachine::STATE_RUNNING;
     return ChangeStateReturnItem::TRANSITION;
   }
@@ -974,22 +932,20 @@ ChangeStateReturnItem AutowareStateMachine::changeState4RunAndStop(void)
   if (cur_autoware_state_ == tier4_system_msgs::msg::AutowareState::DRIVING) {
     /* If the voice guidance due to restart after pausing is playing, confirm the completion. */
     /* Do not transition to another state so as not to overwhelm the voice guidance of restart. */
-    if (current_service_layer_state_ ==
-      autoware_state_machine_msgs::msg::StateMachine::STATE_INFORM_RESTART)
-    {
-      if (sound_done_param_[
-          autoware_state_machine_msgs::msg::StateMachine::STATE_INFORM_RESTART].done_flag ==
-        false)
-      {
+    if (
+      current_service_layer_state_ ==
+      autoware_state_machine_msgs::msg::StateMachine::STATE_INFORM_RESTART) {
+      if (
+        sound_done_param_[autoware_state_machine_msgs::msg::StateMachine::STATE_INFORM_RESTART]
+          .done_flag == false) {
         return ChangeStateReturnItem::NONE;
       }
       /* Audio playback completed */
       /* Since the voice guidance for restarting is completed, the judgment of whether or not
           the state has fallen into the pause state after this is skipped. */
       setEngageProcess(false, true);
-      sound_done_param_[
-        autoware_state_machine_msgs::msg::StateMachine::STATE_INFORM_RESTART].done_flag =
-        false;
+      sound_done_param_[autoware_state_machine_msgs::msg::StateMachine::STATE_INFORM_RESTART]
+        .done_flag = false;
       current_service_layer_state_ = autoware_state_machine_msgs::msg::StateMachine::STATE_RUNNING;
       return ChangeStateReturnItem::TRANSITION;
     }
@@ -997,14 +953,11 @@ ChangeStateReturnItem AutowareStateMachine::changeState4RunAndStop(void)
     /* If restart is requested, voice guidance will be played. */
     auto [is_request, is_accept] = getEngageProcess();
     if (is_request && !is_accept) {
-      sound_done_param_[
-        autoware_state_machine_msgs::msg::StateMachine::STATE_INFORM_RESTART].done_flag =
-        false;
-      sound_done_param_[
-        autoware_state_machine_msgs::msg::StateMachine::STATE_INFORM_RESTART].sec =
+      sound_done_param_[autoware_state_machine_msgs::msg::StateMachine::STATE_INFORM_RESTART]
+        .done_flag = false;
+      sound_done_param_[autoware_state_machine_msgs::msg::StateMachine::STATE_INFORM_RESTART].sec =
         wait_done_time.sec;
-      sound_done_param_[
-        autoware_state_machine_msgs::msg::StateMachine::STATE_INFORM_RESTART].nsec =
+      sound_done_param_[autoware_state_machine_msgs::msg::StateMachine::STATE_INFORM_RESTART].nsec =
         wait_done_time.nanosec;
       current_service_layer_state_ =
         autoware_state_machine_msgs::msg::StateMachine::STATE_INFORM_RESTART;
@@ -1014,19 +967,20 @@ ChangeStateReturnItem AutowareStateMachine::changeState4RunAndStop(void)
     if (stop_reason_ == "") {
       const auto isStopState =
         (current_service_layer_state_ ==
-        autoware_state_machine_msgs::msg::StateMachine::STATE_STOP_DUETO_APPROACHING_OBSTACLE) ||
+         autoware_state_machine_msgs::msg::StateMachine::STATE_STOP_DUETO_APPROACHING_OBSTACLE) ||
         (current_service_layer_state_ ==
-        autoware_state_machine_msgs::msg::StateMachine::STATE_STOP_DUETO_SURROUNDING_PROXIMITY) ||
+         autoware_state_machine_msgs::msg::StateMachine::STATE_STOP_DUETO_SURROUNDING_PROXIMITY) ||
         (current_service_layer_state_ ==
-        autoware_state_machine_msgs::msg::StateMachine::STATE_STOP_DUETO_TRAFFIC_CONDITION);
+         autoware_state_machine_msgs::msg::StateMachine::STATE_STOP_DUETO_TRAFFIC_CONDITION);
 
       /* Suspension without reason is treated as STATE_STOP_DUETO_TRAFFIC_CONDITION.
          If there is no request to restart vehicle and vehicle start running,
-          it will exceptionally transition to STATE_RUNNING, STATE_TURNING_LEFT, or STATE_TURNING_RIGHT. */
+          it will exceptionally transition to STATE_RUNNING, STATE_TURNING_LEFT, or
+         STATE_TURNING_RIGHT. */
       if (isStopState && (velocity_ < engage_threshold_velocity_)) {
-        if (current_service_layer_state_ ==
-          autoware_state_machine_msgs::msg::StateMachine::STATE_STOP_DUETO_TRAFFIC_CONDITION)
-        {
+        if (
+          current_service_layer_state_ ==
+          autoware_state_machine_msgs::msg::StateMachine::STATE_STOP_DUETO_TRAFFIC_CONDITION) {
           return ChangeStateReturnItem::NONE;
         } else {
           current_service_layer_state_ =
@@ -1035,9 +989,9 @@ ChangeStateReturnItem AutowareStateMachine::changeState4RunAndStop(void)
         }
       }
       if (turn_signal_ == tier4_vehicle_msgs::msg::TurnSignal::LEFT) {
-        if (autoware_state_machine_msgs::msg::StateMachine::STATE_TURNING_LEFT !=
-          current_service_layer_state_)
-        {
+        if (
+          autoware_state_machine_msgs::msg::StateMachine::STATE_TURNING_LEFT !=
+          current_service_layer_state_) {
           current_service_layer_state_ =
             autoware_state_machine_msgs::msg::StateMachine::STATE_TURNING_LEFT;
           return ChangeStateReturnItem::TRANSITION;
@@ -1045,9 +999,9 @@ ChangeStateReturnItem AutowareStateMachine::changeState4RunAndStop(void)
         return ChangeStateReturnItem::NONE;
       }
       if (turn_signal_ == tier4_vehicle_msgs::msg::TurnSignal::RIGHT) {
-        if (autoware_state_machine_msgs::msg::StateMachine::STATE_TURNING_RIGHT !=
-          current_service_layer_state_)
-        {
+        if (
+          autoware_state_machine_msgs::msg::StateMachine::STATE_TURNING_RIGHT !=
+          current_service_layer_state_) {
           current_service_layer_state_ =
             autoware_state_machine_msgs::msg::StateMachine::STATE_TURNING_RIGHT;
           return ChangeStateReturnItem::TRANSITION;
@@ -1055,9 +1009,9 @@ ChangeStateReturnItem AutowareStateMachine::changeState4RunAndStop(void)
         return ChangeStateReturnItem::NONE;
       }
 
-      if (autoware_state_machine_msgs::msg::StateMachine::STATE_RUNNING !=
-        current_service_layer_state_)
-      {
+      if (
+        autoware_state_machine_msgs::msg::StateMachine::STATE_RUNNING !=
+        current_service_layer_state_) {
         current_service_layer_state_ =
           autoware_state_machine_msgs::msg::StateMachine::STATE_RUNNING;
         return ChangeStateReturnItem::TRANSITION;
@@ -1068,31 +1022,29 @@ ChangeStateReturnItem AutowareStateMachine::changeState4RunAndStop(void)
     if (stop_reason_ == tier4_planning_msgs::msg::StopReason::SURROUND_OBSTACLE_CHECK) {
       /* Transition to the state where voice guidance is played for SourroundProximity.
           Do not check the distance because it is already close. */
-      if (autoware_state_machine_msgs::msg::StateMachine::STATE_STOP_DUETO_SURROUNDING_PROXIMITY !=
-        current_service_layer_state_)
-      {
+      if (
+        autoware_state_machine_msgs::msg::StateMachine::STATE_STOP_DUETO_SURROUNDING_PROXIMITY !=
+        current_service_layer_state_) {
         RCLCPP_DEBUG_STREAM_THROTTLE(
-          this->get_logger(),
-          *this->get_clock(), DEBUG_THROTTLE_TIME,
+          this->get_logger(), *this->get_clock(), DEBUG_THROTTLE_TIME,
           "[autoware_state_machine] StopReason : " << stop_reason_ << " : " << velocity_);
         current_service_layer_state_ =
           autoware_state_machine_msgs::msg::StateMachine::STATE_STOP_DUETO_SURROUNDING_PROXIMITY;
         return ChangeStateReturnItem::TRANSITION;
       }
       return ChangeStateReturnItem::NONE;
-    } else if ( (stop_reason_ == tier4_planning_msgs::msg::StopReason::OBSTACLE_STOP) ||
+    } else if (
+      (stop_reason_ == tier4_planning_msgs::msg::StopReason::OBSTACLE_STOP) ||
       (stop_reason_ == tier4_planning_msgs::msg::StopReason::DETECTION_AREA) ||
-      (stop_reason_ == tier4_planning_msgs::msg::StopReason::CROSSWALK) )
-    {
+      (stop_reason_ == tier4_planning_msgs::msg::StopReason::CROSSWALK)) {
       /* Transition to a state in which voice guidance is played for obstacle detection. */
       /* Make sure the own vehicle is close enough to the target. */
       if (cur_dist_to_stop_pose_ <= dist_to_stop_pose_min_th_) {
-        if (autoware_state_machine_msgs::msg::StateMachine::STATE_STOP_DUETO_APPROACHING_OBSTACLE !=
-          current_service_layer_state_)
-        {
+        if (
+          autoware_state_machine_msgs::msg::StateMachine::STATE_STOP_DUETO_APPROACHING_OBSTACLE !=
+          current_service_layer_state_) {
           RCLCPP_DEBUG_STREAM_THROTTLE(
-            this->get_logger(),
-            *this->get_clock(), DEBUG_THROTTLE_TIME,
+            this->get_logger(), *this->get_clock(), DEBUG_THROTTLE_TIME,
             "[autoware_state_machine] StopReason : " << stop_reason_ << " : " << velocity_);
           current_service_layer_state_ =
             autoware_state_machine_msgs::msg::StateMachine::STATE_STOP_DUETO_APPROACHING_OBSTACLE;
@@ -1100,12 +1052,11 @@ ChangeStateReturnItem AutowareStateMachine::changeState4RunAndStop(void)
         }
         return ChangeStateReturnItem::NONE;
       } else {
-        if (autoware_state_machine_msgs::msg::StateMachine::STATE_RUNNING_TOWARD_OBSTACLE !=
-          current_service_layer_state_)
-        {
+        if (
+          autoware_state_machine_msgs::msg::StateMachine::STATE_RUNNING_TOWARD_OBSTACLE !=
+          current_service_layer_state_) {
           RCLCPP_DEBUG_STREAM_THROTTLE(
-            this->get_logger(),
-            *this->get_clock(), DEBUG_THROTTLE_TIME,
+            this->get_logger(), *this->get_clock(), DEBUG_THROTTLE_TIME,
             "[autoware_state_machine] StopReason : " << stop_reason_ << " : " << velocity_);
           current_service_layer_state_ =
             autoware_state_machine_msgs::msg::StateMachine::STATE_RUNNING_TOWARD_OBSTACLE;
@@ -1122,12 +1073,11 @@ ChangeStateReturnItem AutowareStateMachine::changeState4RunAndStop(void)
           the transition to a state where voice guidance is not played is made. */
       /* Make sure the own vehicle is close enough to the target. */
       if (cur_dist_to_stop_pose_ <= dist_to_stop_pose_min_th_) {
-        if (autoware_state_machine_msgs::msg::StateMachine::STATE_STOP_DUETO_TRAFFIC_CONDITION !=
-          current_service_layer_state_)
-        {
+        if (
+          autoware_state_machine_msgs::msg::StateMachine::STATE_STOP_DUETO_TRAFFIC_CONDITION !=
+          current_service_layer_state_) {
           RCLCPP_DEBUG_STREAM_THROTTLE(
-            this->get_logger(),
-            *this->get_clock(), DEBUG_THROTTLE_TIME,
+            this->get_logger(), *this->get_clock(), DEBUG_THROTTLE_TIME,
             "[autoware_state_machine] StopReason : " << stop_reason_ << " : " << velocity_);
           current_service_layer_state_ =
             autoware_state_machine_msgs::msg::StateMachine::STATE_STOP_DUETO_TRAFFIC_CONDITION;
@@ -1135,12 +1085,11 @@ ChangeStateReturnItem AutowareStateMachine::changeState4RunAndStop(void)
         }
         return ChangeStateReturnItem::NONE;
       } else {
-        if (autoware_state_machine_msgs::msg::StateMachine::STATE_RUNNING_TOWARD_STOP_LINE !=
-          current_service_layer_state_)
-        {
+        if (
+          autoware_state_machine_msgs::msg::StateMachine::STATE_RUNNING_TOWARD_STOP_LINE !=
+          current_service_layer_state_) {
           RCLCPP_DEBUG_STREAM_THROTTLE(
-            this->get_logger(),
-            *this->get_clock(), DEBUG_THROTTLE_TIME,
+            this->get_logger(), *this->get_clock(), DEBUG_THROTTLE_TIME,
             "[autoware_state_machine] StopReason : " << stop_reason_ << " : " << velocity_);
           current_service_layer_state_ =
             autoware_state_machine_msgs::msg::StateMachine::STATE_RUNNING_TOWARD_STOP_LINE;
@@ -1161,14 +1110,11 @@ ChangeStateReturnItem AutowareStateMachine::changeState4RunAndStop(void)
   if (cur_autoware_state_ == tier4_system_msgs::msg::AutowareState::ARRIVAL_GOAL) {
     flag_arrived_state_machine_ = true;
     /* Play voice guidance for arrival at the goal */
-    sound_done_param_[
-      autoware_state_machine_msgs::msg::StateMachine::STATE_ARRIVED_GOAL].done_flag =
-      false;
-    sound_done_param_[
-      autoware_state_machine_msgs::msg::StateMachine::STATE_ARRIVED_GOAL].sec =
+    sound_done_param_[autoware_state_machine_msgs::msg::StateMachine::STATE_ARRIVED_GOAL]
+      .done_flag = false;
+    sound_done_param_[autoware_state_machine_msgs::msg::StateMachine::STATE_ARRIVED_GOAL].sec =
       wait_done_time.sec;
-    sound_done_param_[
-      autoware_state_machine_msgs::msg::StateMachine::STATE_ARRIVED_GOAL].nsec =
+    sound_done_param_[autoware_state_machine_msgs::msg::StateMachine::STATE_ARRIVED_GOAL].nsec =
       wait_done_time.nanosec;
     current_service_layer_state_ =
       autoware_state_machine_msgs::msg::StateMachine::STATE_ARRIVED_GOAL;
@@ -1181,9 +1127,9 @@ ChangeStateReturnItem AutowareStateMachine::changeState4RunAndStop(void)
       autoware_state_machine_msgs::msg::StateMachine::STATE_DURING_WAKEUP;
     return ChangeStateReturnItem::TRANSITION;
   }
-  if ( (cur_autoware_state_ == tier4_system_msgs::msg::AutowareState::WAITING_FOR_ROUTE) ||
-    (cur_autoware_state_ == tier4_system_msgs::msg::AutowareState::PLANNING) )
-  {
+  if (
+    (cur_autoware_state_ == tier4_system_msgs::msg::AutowareState::WAITING_FOR_ROUTE) ||
+    (cur_autoware_state_ == tier4_system_msgs::msg::AutowareState::PLANNING)) {
     current_service_layer_state_ =
       autoware_state_machine_msgs::msg::StateMachine::STATE_DURING_RECEIVE_ROUTE;
     return ChangeStateReturnItem::TRANSITION;
@@ -1218,9 +1164,9 @@ ChangeStateReturnItem AutowareStateMachine::changeState4DuringObstacleAvoidance(
       autoware_state_machine_msgs::msg::StateMachine::STATE_DURING_WAKEUP;
     return ChangeStateReturnItem::TRANSITION;
   }
-  if ( (cur_autoware_state_ == tier4_system_msgs::msg::AutowareState::WAITING_FOR_ROUTE) ||
-    (cur_autoware_state_ == tier4_system_msgs::msg::AutowareState::PLANNING) )
-  {
+  if (
+    (cur_autoware_state_ == tier4_system_msgs::msg::AutowareState::WAITING_FOR_ROUTE) ||
+    (cur_autoware_state_ == tier4_system_msgs::msg::AutowareState::PLANNING)) {
     current_service_layer_state_ =
       autoware_state_machine_msgs::msg::StateMachine::STATE_DURING_RECEIVE_ROUTE;
     return ChangeStateReturnItem::TRANSITION;
@@ -1235,9 +1181,8 @@ ChangeStateReturnItem AutowareStateMachine::changeState4Arrived(void)
   // Force  Pattern
   if (cur_emergency_holding_ == true) {
     flag_arrived_state_machine_ = false;
-    sound_done_param_[
-      autoware_state_machine_msgs::msg::StateMachine::STATE_ARRIVED_GOAL].done_flag =
-      false;
+    sound_done_param_[autoware_state_machine_msgs::msg::StateMachine::STATE_ARRIVED_GOAL]
+      .done_flag = false;
     current_service_layer_state_ =
       autoware_state_machine_msgs::msg::StateMachine::STATE_EMERGENCY_STOP;
     return ChangeStateReturnItem::TRANSITION;
@@ -1245,17 +1190,15 @@ ChangeStateReturnItem AutowareStateMachine::changeState4Arrived(void)
 
   /* Do not transition to another state until the arrival voice guidance is completed */
   if (flag_arrived_state_machine_ == true) {
-    if (sound_done_param_[
-        autoware_state_machine_msgs::msg::StateMachine::STATE_ARRIVED_GOAL].done_flag ==
-      false)
-    {
+    if (
+      sound_done_param_[autoware_state_machine_msgs::msg::StateMachine::STATE_ARRIVED_GOAL]
+        .done_flag == false) {
       return ChangeStateReturnItem::NONE;
     }
     /* Audio playback completed */
     flag_arrived_state_machine_ = false;
-    sound_done_param_[
-      autoware_state_machine_msgs::msg::StateMachine::STATE_ARRIVED_GOAL].done_flag =
-      false;
+    sound_done_param_[autoware_state_machine_msgs::msg::StateMachine::STATE_ARRIVED_GOAL]
+      .done_flag = false;
   }
 
   // No transition  Pattern
@@ -1264,9 +1207,9 @@ ChangeStateReturnItem AutowareStateMachine::changeState4Arrived(void)
   }
 
   // Normal  Pattern
-  if ( (cur_autoware_state_ == tier4_system_msgs::msg::AutowareState::WAITING_FOR_ROUTE) ||
-    (cur_autoware_state_ == tier4_system_msgs::msg::AutowareState::PLANNING) )
-  {
+  if (
+    (cur_autoware_state_ == tier4_system_msgs::msg::AutowareState::WAITING_FOR_ROUTE) ||
+    (cur_autoware_state_ == tier4_system_msgs::msg::AutowareState::PLANNING)) {
     current_service_layer_state_ =
       autoware_state_machine_msgs::msg::StateMachine::STATE_DURING_RECEIVE_ROUTE;
     return ChangeStateReturnItem::TRANSITION;
@@ -1300,7 +1243,8 @@ ChangeStateReturnItem AutowareStateMachine::changeState4Emergency(void)
   // Normal  Pattern
   if (emergency_recover_mode_ == true) {
     /* There is no recovery pattern from EM in normal specifications.
-       For debug, consider the case of manually recovering from EM after turning off the vehicle side switch to automatic driving. */
+       For debug, consider the case of manually recovering from EM after turning off the vehicle
+       side switch to automatic driving. */
     if (current_control_layer_state_ == autoware_state_machine_msgs::msg::StateMachine::MANUAL) {
       if (cur_autoware_state_ == tier4_system_msgs::msg::AutowareState::INITIALIZING_VEHICLE) {
         current_service_layer_state_ =
@@ -1308,17 +1252,17 @@ ChangeStateReturnItem AutowareStateMachine::changeState4Emergency(void)
         return ChangeStateReturnItem::TRANSITION;
       }
 
-      if ((cur_autoware_state_ == tier4_system_msgs::msg::AutowareState::WAITING_FOR_ROUTE) ||
-        (cur_autoware_state_ == tier4_system_msgs::msg::AutowareState::PLANNING))
-      {
+      if (
+        (cur_autoware_state_ == tier4_system_msgs::msg::AutowareState::WAITING_FOR_ROUTE) ||
+        (cur_autoware_state_ == tier4_system_msgs::msg::AutowareState::PLANNING)) {
         current_service_layer_state_ =
           autoware_state_machine_msgs::msg::StateMachine::STATE_DURING_RECEIVE_ROUTE;
         return ChangeStateReturnItem::TRANSITION;
       }
 
-      if ((cur_autoware_state_ == tier4_system_msgs::msg::AutowareState::WAITING_FOR_ENGAGE) ||
-        (cur_autoware_state_ == tier4_system_msgs::msg::AutowareState::DRIVING))
-      {
+      if (
+        (cur_autoware_state_ == tier4_system_msgs::msg::AutowareState::WAITING_FOR_ENGAGE) ||
+        (cur_autoware_state_ == tier4_system_msgs::msg::AutowareState::DRIVING)) {
         flag_calls_vehicle_voice_ = false;
         current_service_layer_state_ =
           autoware_state_machine_msgs::msg::StateMachine::STATE_WAITING_ENGAGE_INSTRUCTION;
@@ -1335,7 +1279,7 @@ ChangeStateReturnItem AutowareStateMachine::changeControlLayerState(void)
   uint16_t control_layer_state;
   auto is_before_driving =
     (current_service_layer_state_ >=
-    autoware_state_machine_msgs::msg::StateMachine::STATE_DURING_WAKEUP) &&
+     autoware_state_machine_msgs::msg::StateMachine::STATE_DURING_WAKEUP) &&
     (current_service_layer_state_ < autoware_state_machine_msgs::msg::StateMachine::STATE_RUNNING);
 
   if (use_overridable_vehicle_ && is_before_driving) {
@@ -1345,7 +1289,7 @@ ChangeStateReturnItem AutowareStateMachine::changeControlLayerState(void)
       control_layer_state = autoware_state_machine_msgs::msg::StateMachine::AUTO;
     }
   } else {
-    if (cur_control_mode_ == tier4_vehicle_msgs::msg::ControlMode::MANUAL) {
+    if (cur_control_mode_ == autoware_vehicle_msgs::msg::ControlModeReport::MANUAL) {
       control_layer_state = autoware_state_machine_msgs::msg::StateMachine::MANUAL;
     } else {
       control_layer_state = autoware_state_machine_msgs::msg::StateMachine::AUTO;
@@ -1362,12 +1306,11 @@ ChangeStateReturnItem AutowareStateMachine::changeControlLayerState(void)
 
 void AutowareStateMachine::setEngageProcess(bool request, bool accept)
 {
-  /* In multi-threaded system, there is a possibility of simultaneous accesses from different threads,
-      so exclusion control is performed.
-     Set request to "true" when we want the audio to play when vehicle departs and restarts.
-     Set accept to "true" when the audio playback is complete.
-     If you want to suspend waiting for playback to complete for some reason,
-      set both values to "false". */
+  /* In multi-threaded system, there is a possibility of simultaneous accesses from different
+     threads, so exclusion control is performed. Set request to "true" when we want the audio to
+     play when vehicle departs and restarts. Set accept to "true" when the audio playback is
+     complete. If you want to suspend waiting for playback to complete for some reason, set both
+     values to "false". */
   std::lock_guard<std::shared_mutex> lock(mtx_);
   is_engage_requesting_ = request;
   is_engage_accepted_ = accept;
@@ -1375,9 +1318,9 @@ void AutowareStateMachine::setEngageProcess(bool request, bool accept)
 
 std::pair<bool, bool> AutowareStateMachine::getEngageProcess()
 {
-  /* In multi-threaded system, there is a possibility of simultaneous accesses from different threads,
-      so exclusion control is performed.
-     Check both values to determine if the playback is played, interrupted, or completed. */
+  /* In multi-threaded system, there is a possibility of simultaneous accesses from different
+     threads, so exclusion control is performed. Check both values to determine if the playback is
+     played, interrupted, or completed. */
   std::pair<bool, bool> value;
   {
     std::shared_lock<std::shared_mutex> lock(mtx_);
@@ -1398,8 +1341,7 @@ bool AutowareStateMachine::waitingForEngageAccept()
     }
     if (!is_request) {
       RCLCPP_ERROR_THROTTLE(
-        this->get_logger(),
-        *this->get_clock(), DEBUG_THROTTLE_TIME,
+        this->get_logger(), *this->get_clock(), DEBUG_THROTTLE_TIME,
         "[autoware_state_machine] Engage Request Interruption ");
       return false;
     }
@@ -1437,40 +1379,33 @@ AutowareStateMachine::AutowareStateMachine(
   cur_emergency_holding_ = false;
 
   builtin_interfaces::msg::Time wait_done_time = this->now();
-  sound_done_param_[
-    autoware_state_machine_msgs::msg::StateMachine::STATE_INFORM_ENGAGE] =
-  {wait_done_time.sec, wait_done_time.nanosec, 10.0, false};
-  sound_done_param_[
-    autoware_state_machine_msgs::msg::StateMachine::STATE_INFORM_RESTART] =
-  {wait_done_time.sec, wait_done_time.nanosec, 10.0, false};
-  sound_done_param_[
-    autoware_state_machine_msgs::msg::StateMachine::STATE_CHECK_NODE_ALIVE] =
-  {wait_done_time.sec, wait_done_time.nanosec, 10.0, false};
-  sound_done_param_[
-    autoware_state_machine_msgs::msg::StateMachine::STATE_ARRIVED_GOAL] =
-  {wait_done_time.sec, wait_done_time.nanosec, 10.0, false};
+  sound_done_param_[autoware_state_machine_msgs::msg::StateMachine::STATE_INFORM_ENGAGE] = {
+    wait_done_time.sec, wait_done_time.nanosec, 10.0, false};
+  sound_done_param_[autoware_state_machine_msgs::msg::StateMachine::STATE_INFORM_RESTART] = {
+    wait_done_time.sec, wait_done_time.nanosec, 10.0, false};
+  sound_done_param_[autoware_state_machine_msgs::msg::StateMachine::STATE_CHECK_NODE_ALIVE] = {
+    wait_done_time.sec, wait_done_time.nanosec, 10.0, false};
+  sound_done_param_[autoware_state_machine_msgs::msg::StateMachine::STATE_ARRIVED_GOAL] = {
+    wait_done_time.sec, wait_done_time.nanosec, 10.0, false};
 
   // Adjustment Parameter
   update_rate = 1.0;
   engage_threshold_velocity_ = 0.0278 * 3;  // 0.3[km/h]=0.0278 * 3[m/s]
-  stop_threshold_velocity_ = 0.0278 * 3;  // 0.3[km/h]=0.0278 * 3[m/s]
-  vehicle_state_overtime_ = 0.3;       // /awapi/autoware/get/status is received at 20ms intervals
-  autoware_state_overtime_ = 0.3;      // /awapi/vehicle/get/status is received at 20ms intervals
+  stop_threshold_velocity_ = 0.0278 * 3;    // 0.3[km/h]=0.0278 * 3[m/s]
+  vehicle_state_overtime_ = 0.3;   // /awapi/autoware/get/status is received at 20ms intervals
+  autoware_state_overtime_ = 0.3;  // /awapi/vehicle/get/status is received at 20ms intervals
   engage_wait_overtime_ = 1.0;
   delivery_reservation_verification_overtime_ = 15.0;
   dist_to_stop_pose_max_th_ = 10.0;
 
-  double stop_dist_to_prohibit_engage = this->declare_parameter<double>(
-    "stop_dist_to_prohibit_engage", 0.30);
+  double stop_dist_to_prohibit_engage =
+    this->declare_parameter<double>("stop_dist_to_prohibit_engage", 0.30);
   // Add a value of 0.05 to `stop_dist_to_prohibit_engage`.
   dist_to_stop_pose_min_th_ = stop_dist_to_prohibit_engage + 0.05;
 
-  use_overridable_vehicle_ = this->declare_parameter<bool>(
-    "use_overridable_vehicle", true);
+  use_overridable_vehicle_ = this->declare_parameter<bool>("use_overridable_vehicle", true);
 
-  RCLCPP_DEBUG(
-    this->get_logger(),
-    "[autoware_state_machine] init");
+  RCLCPP_DEBUG(this->get_logger(), "[autoware_state_machine] init");
 
   // Callback group
   // This type of callback group only allows one callback to be executed at a time
@@ -1484,8 +1419,7 @@ AutowareStateMachine::AutowareStateMachine(
   // Subscriber
   /* Publisher is set to 'volatile' durability QoS.
       So subscriber needs to be set to 'volatile' for ensuring compatibility. */
-  sub_awapi_autoware_state_ =
-    this->create_subscription<tier4_api_msgs::msg::AwapiAutowareStatus>(
+  sub_awapi_autoware_state_ = this->create_subscription<tier4_api_msgs::msg::AwapiAutowareStatus>(
     "/awapi/autoware/get/status", rclcpp::QoS{1},
     std::bind(&AutowareStateMachine::onAwapiAutowareState, this, std::placeholders::_1),
     subscribe_option);
@@ -1497,14 +1431,15 @@ AutowareStateMachine::AutowareStateMachine(
     subscribe_option);
   sub_calls_delivery_reservation_button_ =
     this->create_subscription<autoware_state_machine_msgs::msg::VehicleButton>(
-    "input/delivery_reservation_button", rclcpp::QoS{1}.transient_local(),
-    std::bind(&AutowareStateMachine::onCallsDeliveryReservationButton, this, std::placeholders::_1),
-    subscribe_option);
+      "input/delivery_reservation_button", rclcpp::QoS{1}.transient_local(),
+      std::bind(
+        &AutowareStateMachine::onCallsDeliveryReservationButton, this, std::placeholders::_1),
+      subscribe_option);
   sub_engage_sound_done_ =
     this->create_subscription<autoware_state_machine_msgs::msg::StateSoundDone>(
-    "/autoware_state_machine/state_sound_done", rclcpp::QoS{1}.transient_local(),
-    std::bind(&AutowareStateMachine::onStateSoundDone, this, std::placeholders::_1),
-    subscribe_option);
+      "/autoware_state_machine/state_sound_done", rclcpp::QoS{1}.transient_local(),
+      std::bind(&AutowareStateMachine::onStateSoundDone, this, std::placeholders::_1),
+      subscribe_option);
   /* Publisher is set to 'volatile' durability QoS.
       So subscriber needs to be set to 'volatile' for ensuring compatibility. */
   sub_calls_vehicle_state_ = this->create_subscription<go_interface_msgs::msg::VehicleStatus>(
@@ -1514,8 +1449,9 @@ AutowareStateMachine::AutowareStateMachine(
   // Publisher
   pub_state_ = this->create_publisher<autoware_state_machine_msgs::msg::StateMachine>(
     "/autoware_state_machine/state", rclcpp::QoS{3}.transient_local());
-  pub_delivery_reservation_state_ = this->create_publisher<autoware_state_machine_msgs::msg::StateLock>(
-    "/autoware_state_machine/lock_state", rclcpp::QoS{3}.transient_local());
+  pub_delivery_reservation_state_ =
+    this->create_publisher<autoware_state_machine_msgs::msg::StateLock>(
+      "/autoware_state_machine/lock_state", rclcpp::QoS{3}.transient_local());
   pub_calls_req_change_lock_ = this->create_publisher<go_interface_msgs::msg::ChangeLockFlg>(
     "req_change_lock_flg", rclcpp::QoS{1});
 
@@ -1523,22 +1459,19 @@ AutowareStateMachine::AutowareStateMachine(
   srv_engage_ = this->create_service<tier4_external_api_msgs::srv::Engage>(
     "/api/external/set/engage",
     std::bind(
-      &AutowareStateMachine::execEngageProcess, this,
-      std::placeholders::_1, std::placeholders::_2),
+      &AutowareStateMachine::execEngageProcess, this, std::placeholders::_1, std::placeholders::_2),
     rmw_qos_profile_services_default, callback_group_service_);
   srv_set_request_start_api_ = this->create_service<std_srvs::srv::Trigger>(
     "/api/autoware/set/start_request",
     std::bind(
-      &AutowareStateMachine::setRequestStartAPI, this,
-      std::placeholders::_1, std::placeholders::_2),
+      &AutowareStateMachine::setRequestStartAPI, this, std::placeholders::_1,
+      std::placeholders::_2),
     rmw_qos_profile_services_default, callback_group_service_);
   // Client
   cli_engage_ = this->create_client<tier4_external_api_msgs::srv::Engage>(
-    "/api/autoware/set/engage",
-    rmw_qos_profile_services_default);
+    "/api/autoware/set/engage", rmw_qos_profile_services_default);
   cli_set_operator_ = this->create_client<tier4_external_api_msgs::srv::SetOperator>(
-    "/api/autoware/set/operator",
-    rmw_qos_profile_services_default);
+    "/api/autoware/set/operator", rmw_qos_profile_services_default);
 
   emergency_recover_mode_ = true;
 
@@ -1553,8 +1486,7 @@ AutowareStateMachine::AutowareStateMachine(
   auto timer_callback = std::bind(&AutowareStateMachine::onTimer, this);
   timer_ = std::make_shared<rclcpp::GenericTimer<decltype(timer_callback)>>(
     this->get_clock(), timer_period_msec, std::move(timer_callback),
-    this->get_node_base_interface()->get_context()
-  );
+    this->get_node_base_interface()->get_context());
   this->get_node_timers_interface()->add_timer(timer_, callback_group_subscription_);
 }
 
