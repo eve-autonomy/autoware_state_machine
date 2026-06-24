@@ -15,170 +15,111 @@
 #ifndef AUTOWARE_STATE_MACHINE__AUTOWARE_STATE_MACHINE_HPP_
 #define AUTOWARE_STATE_MACHINE__AUTOWARE_STATE_MACHINE_HPP_
 
-#include "rclcpp/rclcpp.hpp"
-#include "tier4_api_utils/tier4_api_utils.hpp"
-
-#include "autoware_state_machine_msgs/msg/state_lock.hpp"
-#include "autoware_state_machine_msgs/msg/state_machine.hpp"
-#include "autoware_state_machine_msgs/msg/state_sound_done.hpp"
-#include "autoware_state_machine_msgs/msg/vehicle_button.hpp"
-#include "autoware_vehicle_msgs/msg/control_mode_report.hpp"
-#include "go_interface_msgs/msg/change_lock_flg.hpp"
-#include "go_interface_msgs/msg/vehicle_status.hpp"
-#include "std_srvs/srv/trigger.hpp"
-#include "tier4_api_msgs/msg/awapi_autoware_status.hpp"
-#include "tier4_api_msgs/msg/awapi_vehicle_status.hpp"
-#include "tier4_external_api_msgs/srv/engage.hpp"
-#include "tier4_external_api_msgs/srv/set_operator.hpp"
-#include "tier4_planning_msgs/msg/stop_reason_array.hpp"
-#include "tier4_system_msgs/msg/autoware_state.hpp"
-#include "tier4_vehicle_msgs/msg/turn_signal.hpp"
-
-#include <cmath>
-#include <limits>
-#include <map>
-#include <shared_mutex>
 #include <string>
 #include <utility>
+
+#include "autoware_adapi_v1_msgs/msg/localization_initialization_state.hpp"
+#include "autoware_adapi_v1_msgs/msg/motion_state.hpp"
+#include "autoware_adapi_v1_msgs/msg/operation_mode_state.hpp"
+#include "autoware_adapi_v1_msgs/msg/route_state.hpp"
+#include "autoware_adapi_v1_msgs/msg/vehicle_status.hpp"
+#include "autoware_state_machine_msgs/msg/state_machine.hpp"
+#include "autoware_state_machine_msgs/msg/state_sound_done.hpp"
+#include "go_interface_msgs/msg/vehicle_status.hpp"
+#include "rclcpp/rclcpp.hpp"
+#include "tier4_external_api_msgs/msg/hazard_status_stamped.hpp"
+#include "tier4_external_api_msgs/msg/planning_factor_array.hpp"
 
 namespace autoware_state_machine
 {
 
-enum class ChangeStateReturnItem {
-  ERROR = 0,
-  NONE,
-  TRANSITION,
-};
-
 class AutowareStateMachine : public rclcpp::Node
 {
 public:
-  explicit AutowareStateMachine(const rclcpp::NodeOptions & options);
-  ~AutowareStateMachine();
+  explicit AutowareStateMachine(const rclcpp::NodeOptions & options = rclcpp::NodeOptions());
+  ~AutowareStateMachine() override;
+
+protected:
+  void updateStateFromTopics();
+  void publishStateIfChanged(uint16_t service_layer_state, uint8_t control_layer_state);
+  void setSoundPlayingFlagForState(uint16_t service_layer_state);
+
+  // ADAPI / external topic state
+  autoware_adapi_v1_msgs::msg::MotionState motion_state_;
+  autoware_adapi_v1_msgs::msg::MotionState prev_motion_state_;
+  autoware_adapi_v1_msgs::msg::RouteState route_state_;
+  autoware_adapi_v1_msgs::msg::RouteState prev_route_state_;
+  autoware_adapi_v1_msgs::msg::LocalizationInitializationState localization_state_;
+  autoware_adapi_v1_msgs::msg::LocalizationInitializationState prev_localization_state_;
+  autoware_adapi_v1_msgs::msg::OperationModeState operation_mode_state_;
+  autoware_adapi_v1_msgs::msg::OperationModeState prev_operation_mode_state_;
+  autoware_adapi_v1_msgs::msg::VehicleStatus adapi_vehicle_status_;
+  autoware_adapi_v1_msgs::msg::VehicleStatus prev_adapi_vehicle_status_;
+  go_interface_msgs::msg::VehicleStatus go_interface_vehicle_status_;
+  go_interface_msgs::msg::VehicleStatus prev_go_interface_vehicle_status_;
+  bool emergency_holding_{false};
+
+  // Session flags
+  bool has_started_driving_{false};
+  bool driving_session_had_moving_{false};
+  bool post_engage_sound_latched_{false};
+  bool pending_autonomous_control_inform_engage_{false};
+
+  // Sound playback flags (state_sound_done clears these)
+  bool is_playing_wakeup_sound_{true};
+  bool is_playing_arrival_sound_{false};
+  bool is_playing_engage_sound_{false};
+  bool is_playing_restart_sound_{false};
+
+  // Planning factors cache
+  std::pair<std::string, double> cached_planning_selected_nearest_{"", 0.0};
+  bool planning_selected_stop_reason_initialized_{false};
+
+  uint16_t current_service_layer_state_{
+    autoware_state_machine_msgs::msg::StateMachine::STATE_UNDEFINED};
+  uint8_t current_control_layer_state_{autoware_state_machine_msgs::msg::StateMachine::MANUAL};
+
+  double stop_approach_dist_threshold_m_{0.35};
+  double planning_factors_selection_dist_max_m_{10.0};
 
 private:
-  rclcpp::Node * node_;
+  void callbackMotionState(const autoware_adapi_v1_msgs::msg::MotionState::ConstSharedPtr msg);
+  void callbackRouteState(const autoware_adapi_v1_msgs::msg::RouteState::ConstSharedPtr msg);
+  void callbackLocalizationState(
+    const autoware_adapi_v1_msgs::msg::LocalizationInitializationState::ConstSharedPtr msg);
+  void callbackOperationModeState(
+    const autoware_adapi_v1_msgs::msg::OperationModeState::ConstSharedPtr msg);
+  void callbackAdapiVehicleStatus(
+    const autoware_adapi_v1_msgs::msg::VehicleStatus::ConstSharedPtr msg);
+  void callbackGoInterfaceVehicleStatus(
+    const go_interface_msgs::msg::VehicleStatus::ConstSharedPtr msg);
+  void callbackHazardStatus(
+    const tier4_external_api_msgs::msg::HazardStatusStamped::ConstSharedPtr msg);
+  void callbackPlanningFactors(
+    const tier4_external_api_msgs::msg::PlanningFactorArray::ConstSharedPtr msg);
+  void callbackStateSoundDone(
+    const autoware_state_machine_msgs::msg::StateSoundDone::ConstSharedPtr msg);
 
-  std::shared_mutex mtx_;
-
-  // Callback group
-  rclcpp::CallbackGroup::SharedPtr callback_group_service_;
-  rclcpp::CallbackGroup::SharedPtr callback_group_subscription_;
-
-  // Subscriber
-  rclcpp::Subscription<tier4_api_msgs::msg::AwapiAutowareStatus>::SharedPtr
-    sub_awapi_autoware_state_;
-  rclcpp::Subscription<tier4_api_msgs::msg::AwapiVehicleStatus>::SharedPtr sub_awapi_vehicle_state_;
-  rclcpp::Subscription<autoware_state_machine_msgs::msg::VehicleButton>::SharedPtr
-    sub_calls_delivery_reservation_button_;
+  rclcpp::Subscription<autoware_adapi_v1_msgs::msg::MotionState>::SharedPtr sub_motion_state_;
+  rclcpp::Subscription<autoware_adapi_v1_msgs::msg::RouteState>::SharedPtr sub_route_state_;
+  rclcpp::Subscription<autoware_adapi_v1_msgs::msg::LocalizationInitializationState>::SharedPtr
+    sub_localization_state_;
+  rclcpp::Subscription<autoware_adapi_v1_msgs::msg::OperationModeState>::SharedPtr
+    sub_operation_mode_state_;
+  rclcpp::Subscription<autoware_adapi_v1_msgs::msg::VehicleStatus>::SharedPtr
+    sub_adapi_vehicle_status_;
+  rclcpp::Subscription<go_interface_msgs::msg::VehicleStatus>::SharedPtr
+    sub_go_interface_vehicle_status_;
+  rclcpp::Subscription<tier4_external_api_msgs::msg::HazardStatusStamped>::SharedPtr
+    sub_hazard_status_;
+  rclcpp::Subscription<tier4_external_api_msgs::msg::PlanningFactorArray>::SharedPtr
+    sub_planning_factors_;
   rclcpp::Subscription<autoware_state_machine_msgs::msg::StateSoundDone>::SharedPtr
-    sub_engage_sound_done_;
-  rclcpp::Subscription<go_interface_msgs::msg::VehicleStatus>::SharedPtr sub_calls_vehicle_state_;
-  void onAwapiAutowareState(const tier4_api_msgs::msg::AwapiAutowareStatus::ConstSharedPtr msg_ptr);
-  void onAwapiVehicleState(const tier4_api_msgs::msg::AwapiVehicleStatus::ConstSharedPtr msg_ptr);
-  void onCallsDeliveryReservationButton(
-    const autoware_state_machine_msgs::msg::VehicleButton::ConstSharedPtr msg_ptr);
-  void onStateSoundDone(
-    const autoware_state_machine_msgs::msg::StateSoundDone::ConstSharedPtr msg_ptr);
-  void onCallsVehicleState(const go_interface_msgs::msg::VehicleStatus::ConstSharedPtr msg_ptr);
+    sub_state_sound_done_;
 
-  // Publisher
   rclcpp::Publisher<autoware_state_machine_msgs::msg::StateMachine>::SharedPtr pub_state_;
-  rclcpp::Publisher<autoware_state_machine_msgs::msg::StateLock>::SharedPtr
-    pub_delivery_reservation_state_;
-  rclcpp::Publisher<go_interface_msgs::msg::ChangeLockFlg>::SharedPtr pub_calls_req_change_lock_;
-
-  // Service
-  rclcpp::Service<tier4_external_api_msgs::srv::Engage>::SharedPtr srv_engage_;
-  rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr srv_set_request_start_api_;
-  void execEngageProcess(
-    const tier4_external_api_msgs::srv::Engage::Request::SharedPtr request,
-    const tier4_external_api_msgs::srv::Engage::Response::SharedPtr response);
-  void setRequestStartAPI(
-    const std_srvs::srv::Trigger::Request::SharedPtr request,
-    const std_srvs::srv::Trigger::Response::SharedPtr response);
-
-  // Client
-  rclcpp::Client<tier4_external_api_msgs::srv::Engage>::SharedPtr cli_engage_;
-  rclcpp::Client<tier4_external_api_msgs::srv::SetOperator>::SharedPtr cli_set_operator_;
-
-  // Timer
-  void onTimer();
-  rclcpp::TimerBase::SharedPtr timer_;
-
-  // internal state
-  uint16_t current_service_layer_state_;
-  uint8_t current_control_layer_state_;
-
-  uint16_t current_delivery_reservation_state_;
-
-  builtin_interfaces::msg::Time pre_autoware_state_recv_time_;
-  builtin_interfaces::msg::Time pre_vehicle_state_recv_time_;
-
-  std::string cur_autoware_state_;
-  std::string stop_reason_;
-  int32_t cur_control_mode_;
-  bool is_engage_requesting_;
-  bool is_engage_accepted_;
-  double velocity_;
-  double engage_threshold_velocity_;
-  double stop_threshold_velocity_;
-  int32_t turn_signal_;
-  bool flag_init_state_machine_;
-  bool flag_arrived_state_machine_;
-  double dist_to_stop_pose_max_th_;
-  double dist_to_stop_pose_min_th_;
-  double cur_dist_to_stop_pose_;
-
-  double vehicle_state_overtime_;
-  double autoware_state_overtime_;
-
-  builtin_interfaces::msg::Time engage_wait_time_;
-  double engage_wait_overtime_;
-
-  builtin_interfaces::msg::Time delivery_reservation_verification_time_;
-  double delivery_reservation_verification_overtime_;
-
-  bool emergency_recover_mode_;
-
-  bool flag_calls_vehicle_voice_;
-  bool flag_calls_active_schedule_exists_;
-
-  bool use_overridable_vehicle_;
-
-  bool cur_emergency_holding_;
-
-  typedef struct tuple
-  {
-    int32_t sec;
-    uint32_t nsec;
-    double done_overtime;
-    bool done_flag;
-  } SoundDoneTuple_t;
-  std::map<uint16_t, SoundDoneTuple_t> sound_done_param_;
-
-  // judge
-  void ChangeState(void);
-  ChangeStateReturnItem changeState4NodeAlive(void);
-  ChangeStateReturnItem changeState4DuringWakeup(void);
-  ChangeStateReturnItem changeState4ManualControl(void);
-  ChangeStateReturnItem changeState4DuringReceiveRoute(void);
-  ChangeStateReturnItem changeState4WaintingEngageInstruction(void);
-  ChangeStateReturnItem changeState4InformEngage(void);
-  ChangeStateReturnItem changeState4InstructEngage(void);
-  ChangeStateReturnItem changeState4RunAndStop(void);
-  ChangeStateReturnItem changeState4Restart(void);
-  ChangeStateReturnItem changeState4DuringObstacleAvoidance(void);
-  ChangeStateReturnItem changeState4Arrived(void);
-  ChangeStateReturnItem changeState4Emergency(void);
-  ChangeStateReturnItem changeControlLayerState(void);
-
-  void setEngageProcess(bool request, bool accept);
-  std::pair<bool, bool> getEngageProcess(void);
-  bool waitingForEngageAccept(void);
-  std::pair<std::string, double> getNearestStopReasonWithPriority(
-    const std::vector<tier4_planning_msgs::msg::StopReason> & stop_reasons);
 };
 
 }  // namespace autoware_state_machine
+
 #endif  // AUTOWARE_STATE_MACHINE__AUTOWARE_STATE_MACHINE_HPP_
