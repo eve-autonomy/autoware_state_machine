@@ -20,25 +20,22 @@
 <package format="3">
   <name>autoware_state_machine</name>
   <version>1.0.0</version>
-  <description>The autoware_state_machine package</description>
+  <description>ADAPI-based stateless autoware state machine</description>
   <maintainer email="yuma.nihei@eveautonomy.com">Yuma Nihei</maintainer>
   <license>Apache License 2.0</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
+  <buildtool_depend>ament_cmake_auto</buildtool_depend>
 
   <depend>rclcpp</depend>
-  <depend>tier4_system_msgs</depend>
-  <depend>autoware_state_machine_msgs</depend>
-  <depend>tier4_api_msgs</depend>
-  <depend>tier4_api_utils</depend>
-  <depend>tier4_external_api_msgs</depend>
-  <depend>tier4_planning_msgs</depend>
-  <depend>tier4_vehicle_msgs</depend>
-  <depend>go_interface_msgs</depend>
-  <depend>std_srvs</depend>
   <depend>rclcpp_components</depend>
-
+  <depend>autoware_state_machine_msgs</depend>
+  <depend>autoware_adapi_v1_msgs</depend>
+  <depend>go_interface_msgs</depend>
+  <depend>tier4_external_api_msgs</depend>
   <depend>builtin_interfaces</depend>
+
+  <test_depend>ament_cmake_gtest</test_depend>
 
   <export>
     <build_type>ament_cmake</build_type>
