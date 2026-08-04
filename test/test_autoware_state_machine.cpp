@@ -89,6 +89,33 @@ public:
     updateStateFromTopics();
   }
 
+  void triggerPendingEngage()
+  {
+    pending_autonomous_control_inform_engage_ = true;
+    updateStateFromTopics();
+  }
+
+  void completeEngageSound()
+  {
+    is_playing_engage_sound_ = false;
+    post_engage_sound_latched_ = true;
+    has_started_driving_ = true;
+    updateStateFromTopics();
+  }
+
+  void completeRestartSound()
+  {
+    is_playing_restart_sound_ = false;
+    has_started_driving_ = true;
+    updateStateFromTopics();
+  }
+
+  void completeArrivalSound()
+  {
+    is_playing_arrival_sound_ = false;
+    updateStateFromTopics();
+  }
+
   static rclcpp::NodeOptions createTestNodeOptions()
   {
     rclcpp::NodeOptions options;
@@ -169,4 +196,82 @@ TEST_F(AutowareStateMachineTest, ControlLayerAutoWhenAutowareControlEnabled)
   node_->setMotionState(MotionState::MOVING);
   EXPECT_EQ(node_->getControlLayerState(), StateMachine::AUTO);
   EXPECT_EQ(node_->getServiceLayerState(), StateMachine::STATE_INFORM_ENGAGE);
+}
+
+TEST_F(AutowareStateMachineTest, InitialDeparture_Pattern1)
+{
+  node_->completeWakeupSound();
+  node_->setLocalizationState(LocalizationState::INITIALIZED);
+  node_->setRouteState(RouteState::SET);
+  node_->setOperationMode(true, OperationModeState::AUTONOMOUS);
+  node_->setMotionState(MotionState::STOPPED);
+  EXPECT_EQ(node_->getServiceLayerState(), StateMachine::STATE_WAITING_ENGAGE_INSTRUCTION);
+  node_->setMotionState(MotionState::STARTING);
+  EXPECT_EQ(node_->getServiceLayerState(), StateMachine::STATE_INFORM_ENGAGE);
+  node_->completeEngageSound();
+  EXPECT_EQ(node_->getServiceLayerState(), StateMachine::STATE_INSTRUCT_ENGAGE);
+  node_->setMotionState(MotionState::MOVING);
+  EXPECT_EQ(node_->getServiceLayerState(), StateMachine::STATE_RUNNING);
+}
+
+TEST_F(AutowareStateMachineTest, InitialDeparture_Pattern2)
+{
+  node_->completeWakeupSound();
+  node_->setLocalizationState(LocalizationState::INITIALIZED);
+  node_->setRouteState(RouteState::SET);
+  node_->setOperationMode(true, OperationModeState::AUTONOMOUS);
+  node_->triggerPendingEngage();
+  node_->setMotionState(MotionState::STOPPED);
+  EXPECT_EQ(node_->getServiceLayerState(), StateMachine::STATE_INFORM_ENGAGE);
+  node_->completeEngageSound();
+  EXPECT_EQ(node_->getServiceLayerState(), StateMachine::STATE_INSTRUCT_ENGAGE);
+  node_->setMotionState(MotionState::STARTING);
+  node_->setMotionState(MotionState::MOVING);
+  EXPECT_EQ(node_->getServiceLayerState(), StateMachine::STATE_RUNNING);
+}
+
+TEST_F(AutowareStateMachineTest, RestartAfterStop)
+{
+  node_->completeWakeupSound();
+  node_->setLocalizationState(LocalizationState::INITIALIZED);
+  node_->setRouteState(RouteState::SET);
+  node_->setOperationMode(true, OperationModeState::AUTONOMOUS);
+  node_->triggerPendingEngage();
+  node_->setMotionState(MotionState::STOPPED);
+  node_->completeEngageSound();
+  node_->setMotionState(MotionState::STARTING);
+  node_->setMotionState(MotionState::MOVING);
+  node_->setMotionState(MotionState::STOPPED);
+  EXPECT_EQ(node_->getServiceLayerState(), StateMachine::STATE_STOP_DUETO_TRAFFIC_CONDITION);
+  node_->setMotionState(MotionState::STARTING);
+  EXPECT_EQ(node_->getServiceLayerState(), StateMachine::STATE_INFORM_RESTART);
+  node_->completeRestartSound();
+  node_->setMotionState(MotionState::MOVING);
+  EXPECT_EQ(node_->getServiceLayerState(), StateMachine::STATE_RUNNING);
+}
+
+TEST_F(AutowareStateMachineTest, RestartAfterGoal)
+{
+  node_->completeWakeupSound();
+  node_->setLocalizationState(LocalizationState::INITIALIZED);
+  node_->setRouteState(RouteState::SET);
+  node_->setOperationMode(true, OperationModeState::AUTONOMOUS);
+  node_->triggerPendingEngage();
+  node_->setMotionState(MotionState::STOPPED);
+  node_->completeEngageSound();
+  node_->setMotionState(MotionState::STARTING);
+  node_->setMotionState(MotionState::MOVING);
+  node_->setRouteState(RouteState::ARRIVED);
+  node_->setMotionState(MotionState::STOPPED);
+  node_->triggerPendingEngage();
+  EXPECT_EQ(node_->getServiceLayerState(), StateMachine::STATE_ARRIVED_GOAL);
+  node_->completeArrivalSound();
+  node_->setRouteState(RouteState::UNSET);
+  node_->setRouteState(RouteState::SET);
+  EXPECT_EQ(node_->getServiceLayerState(), StateMachine::STATE_INFORM_ENGAGE);
+  node_->completeEngageSound();
+  EXPECT_EQ(node_->getServiceLayerState(), StateMachine::STATE_INSTRUCT_ENGAGE);
+  node_->setMotionState(MotionState::STARTING);
+  node_->setMotionState(MotionState::MOVING);
+  EXPECT_EQ(node_->getServiceLayerState(), StateMachine::STATE_RUNNING);
 }
