@@ -216,7 +216,9 @@ void AutowareStateMachine::updateStateFromTopics()
     service_layer_state = StateMachine::STATE_INSTRUCT_ENGAGE;
   } else if (motion_state_.state == MotionState::STARTING && !has_started_driving_) {
     service_layer_state = StateMachine::STATE_INFORM_ENGAGE;
-  } else if (motion_state_.state == MotionState::STARTING && has_started_driving_) {
+  } else if (motion_state_.state == MotionState::STARTING && has_started_driving_ && !driving_session_had_moving_) {
+    service_layer_state = StateMachine::STATE_INSTRUCT_ENGAGE; 
+  } else if (motion_state_.state == MotionState::STARTING && has_started_driving_ && driving_session_had_moving_) {
     service_layer_state = StateMachine::STATE_INFORM_RESTART;
   } else if (
     motion_state_.state == MotionState::MOVING &&
@@ -271,6 +273,7 @@ void AutowareStateMachine::callbackMotionState(
   if (prev_motion_state_.state == MotionState::STOPPED &&
     motion_state_.state == MotionState::MOVING &&
     has_started_driving_ &&
+    driving_session_had_moving_ &&
     !is_playing_restart_sound_)
   {
     is_playing_restart_sound_ = true;
