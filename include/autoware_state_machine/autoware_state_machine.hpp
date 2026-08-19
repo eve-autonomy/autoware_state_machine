@@ -60,6 +60,7 @@ protected:
   bool emergency_holding_{false};
 
   // Session flags
+  bool stop_before_first_move_{false};
   bool has_started_driving_{false};
   bool driving_session_had_moving_{false};
   bool post_engage_sound_latched_{false};
