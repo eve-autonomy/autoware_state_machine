@@ -126,6 +126,7 @@ void AutowareStateMachine::updateStateFromTopics()
     route_state_.state != RouteState::SET ||
     localization_state_.state != LocalizationState::INITIALIZED)
   {
+    stop_before_first_move_ = false;
     has_started_driving_ = false;
     driving_session_had_moving_ = false;
   }
@@ -198,6 +199,9 @@ void AutowareStateMachine::updateStateFromTopics()
     route_state_.state == RouteState::SET &&
     (driving_session_had_moving_ || planning_p14_stop_factor))
   {
+    if (!driving_session_had_moving_) {
+      stop_before_first_move_ = true;
+    }
     const std::string & bname = planning_sel_name;
     if ((bname == "surround_obstacle_checker" || bname == "surrounding_obstacle") &&
       post_engage_sound_latched_)
@@ -217,7 +221,7 @@ void AutowareStateMachine::updateStateFromTopics()
   } else if (motion_state_.state == MotionState::STARTING && !has_started_driving_) {
     service_layer_state = StateMachine::STATE_INFORM_ENGAGE;
   } else if (motion_state_.state == MotionState::STARTING && has_started_driving_ && !driving_session_had_moving_) {
-    service_layer_state = StateMachine::STATE_INSTRUCT_ENGAGE; 
+    service_layer_state = stop_before_first_move_ ? StateMachine::STATE_INFORM_RESTART : StateMachine::STATE_INSTRUCT_ENGAGE;
   } else if (motion_state_.state == MotionState::STARTING && has_started_driving_ && driving_session_had_moving_) {
     service_layer_state = StateMachine::STATE_INFORM_RESTART;
   } else if (
@@ -235,6 +239,7 @@ void AutowareStateMachine::updateStateFromTopics()
     route_state_.state == RouteState::SET)
   {
     driving_session_had_moving_ = true;
+    stop_before_first_move_ = false;
 
     const std::string & bname = planning_sel_name;
     if ((bname == "surround_obstacle_checker" || bname == "surrounding_obstacle") &&
@@ -311,6 +316,7 @@ void AutowareStateMachine::callbackRouteState(
     planning_selected_stop_reason_initialized_ = false;
     cached_planning_selected_nearest_ = {"", 0.0};
     driving_session_had_moving_ = false;
+    stop_before_first_move_ = false;
   }
 
   if (prev_route_state_.state != route_state_.state) {
