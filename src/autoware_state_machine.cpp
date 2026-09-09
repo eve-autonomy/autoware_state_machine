@@ -47,7 +47,7 @@ AutowareStateMachine::AutowareStateMachine(const rclcpp::NodeOptions & options)
     "/api/operation_mode/state", rclcpp::QoS{1},
     std::bind(&AutowareStateMachine::callbackOperationModeState, this, std::placeholders::_1));
   sub_adapi_vehicle_status_ = this->create_subscription<autoware_adapi_v1_msgs::msg::VehicleStatus>(
-    "/api/vehicle/status", rclcpp::QoS{1},
+    "/api/vehicle/status", rclcpp::SensorDataQoS(),
     std::bind(&AutowareStateMachine::callbackAdapiVehicleStatus, this, std::placeholders::_1));
   sub_go_interface_vehicle_status_ = this->create_subscription<go_interface_msgs::msg::VehicleStatus>(
     "api_vehicle_status", rclcpp::QoS{1},
