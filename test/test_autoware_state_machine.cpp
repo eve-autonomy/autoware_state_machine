@@ -16,6 +16,10 @@
 
 #include <gtest/gtest.h>
 
+#include <chrono>
+#include <thread>
+#include <vector>
+
 #include <autoware_adapi_v1_msgs/msg/localization_initialization_state.hpp>
 #include <autoware_adapi_v1_msgs/msg/motion_state.hpp>
 #include <autoware_adapi_v1_msgs/msg/operation_mode_state.hpp>
@@ -40,10 +44,33 @@ class TestableAutowareStateMachine : public autoware_state_machine::AutowareStat
 {
 public:
   explicit TestableAutowareStateMachine(const rclcpp::NodeOptions & options)
-  : AutowareStateMachine(options) {}
+  : AutowareStateMachine(options)
+  {
+    pub_initial_pose_approval_state_ =
+      create_publisher<LocalizationState>(
+      "/localization/approver/initialization_state", rclcpp::QoS{1}.transient_local());
+    sub_state_for_test_ = create_subscription<StateMachine>(
+      "/autoware_state_machine/state", rclcpp::QoS{3}.transient_local(),
+      [this](const StateMachine::ConstSharedPtr msg) {
+        published_service_layer_states_.push_back(msg->service_layer_state);
+      });
+  }
 
   uint16_t getServiceLayerState() const { return current_service_layer_state_; }
   uint8_t getControlLayerState() const { return current_control_layer_state_; }
+  uint16_t getInitialPoseApprovalState() const { return initial_pose_approval_state_.state; }
+  bool isPlayingImuCalibrationSound() const { return is_playing_imu_calibration_sound_; }
+
+  void clearPublishedServiceLayerStates()
+  {
+    spinSome();
+    published_service_layer_states_.clear();
+  }
+
+  const std::vector<uint16_t> & getPublishedServiceLayerStates() const
+  {
+    return published_service_layer_states_;
+  }
 
   void setLocalizationState(uint16_t state)
   {
@@ -116,6 +143,14 @@ public:
     updateStateFromTopics();
   }
 
+  void publishInitialPoseApprovalState(uint16_t state)
+  {
+    LocalizationState msg;
+    msg.state = state;
+    pub_initial_pose_approval_state_->publish(msg);
+    spinSome();
+  }
+
   static rclcpp::NodeOptions createTestNodeOptions()
   {
     rclcpp::NodeOptions options;
@@ -125,6 +160,23 @@ public:
     });
     return options;
   }
+
+private:
+  void spinSome()
+  {
+    rclcpp::executors::SingleThreadedExecutor executor;
+    executor.add_node(shared_from_this());
+    const auto end = std::chrono::steady_clock::now() + std::chrono::milliseconds(100);
+    do {
+      executor.spin_some();
+      std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    } while (std::chrono::steady_clock::now() < end);
+    executor.remove_node(shared_from_this());
+  }
+
+  rclcpp::Publisher<LocalizationState>::SharedPtr pub_initial_pose_approval_state_;
+  rclcpp::Subscription<StateMachine>::SharedPtr sub_state_for_test_;
+  std::vector<uint16_t> published_service_layer_states_;
 };
 
 class AutowareStateMachineTest : public ::testing::Test
@@ -274,4 +326,87 @@ TEST_F(AutowareStateMachineTest, RestartAfterGoal)
   node_->setMotionState(MotionState::STARTING);
   node_->setMotionState(MotionState::MOVING);
   EXPECT_EQ(node_->getServiceLayerState(), StateMachine::STATE_RUNNING);
+}
+
+TEST_F(AutowareStateMachineTest, IncompleteImuWithAutowareControlEnabledRequestsCalibrationSound)
+{
+  node_->completeWakeupSound();
+
+  node_->setOperationMode(true, OperationModeState::STOP);
+
+  node_->clearPublishedServiceLayerStates();
+  node_->publishInitialPoseApprovalState(LocalizationState::UNINITIALIZED);
+  ASSERT_EQ(node_->getInitialPoseApprovalState(), LocalizationState::UNINITIALIZED);
+
+  EXPECT_EQ(node_->getServiceLayerState(), StateMachine::STATE_INFORM_IMU_CALIBRATION);
+  EXPECT_EQ(
+    node_->getPublishedServiceLayerStates(),
+    std::vector<uint16_t>{StateMachine::STATE_INFORM_IMU_CALIBRATION});
+}
+
+TEST_F(AutowareStateMachineTest, IncompleteImuWithAutowareControlDisabledDoesNotRequestSound)
+{
+  node_->completeWakeupSound();
+
+  node_->setOperationMode(false, OperationModeState::AUTONOMOUS);
+
+  node_->clearPublishedServiceLayerStates();
+  node_->publishInitialPoseApprovalState(LocalizationState::UNINITIALIZED);
+  ASSERT_EQ(node_->getInitialPoseApprovalState(), LocalizationState::UNINITIALIZED);
+
+  EXPECT_TRUE(node_->getPublishedServiceLayerStates().empty());
+}
+
+TEST_F(AutowareStateMachineTest, InitializingOrInitializedDoesNotRequestCalibrationSound)
+{
+  node_->completeWakeupSound();
+  node_->setOperationMode(true, OperationModeState::STOP);
+
+  node_->clearPublishedServiceLayerStates();
+  node_->publishInitialPoseApprovalState(LocalizationState::INITIALIZING);
+  EXPECT_EQ(node_->getInitialPoseApprovalState(), LocalizationState::INITIALIZING);
+  EXPECT_TRUE(node_->getPublishedServiceLayerStates().empty());
+
+  node_->clearPublishedServiceLayerStates();
+  node_->publishInitialPoseApprovalState(LocalizationState::INITIALIZED);
+  EXPECT_EQ(node_->getInitialPoseApprovalState(), LocalizationState::INITIALIZED);
+  EXPECT_TRUE(node_->getPublishedServiceLayerStates().empty());
+}
+
+TEST_F(AutowareStateMachineTest, RepeatedIncompleteImuDoesNotPublishAnotherSoundRequest)
+{
+  node_->completeWakeupSound();
+  node_->setOperationMode(true, OperationModeState::STOP);
+
+  node_->publishInitialPoseApprovalState(LocalizationState::UNINITIALIZED);
+  ASSERT_TRUE(node_->isPlayingImuCalibrationSound());
+  ASSERT_EQ(node_->getServiceLayerState(), StateMachine::STATE_INFORM_IMU_CALIBRATION);
+
+  node_->clearPublishedServiceLayerStates();
+  node_->publishInitialPoseApprovalState(LocalizationState::UNINITIALIZED);
+  EXPECT_TRUE(node_->getPublishedServiceLayerStates().empty());
+}
+
+TEST_F(AutowareStateMachineTest, IncompleteImuDuringWakeupSoundDoesNotRequestCalibrationSound)
+{
+  node_->setOperationMode(true, OperationModeState::STOP);
+
+  node_->clearPublishedServiceLayerStates();
+  node_->publishInitialPoseApprovalState(LocalizationState::UNINITIALIZED);
+  EXPECT_EQ(node_->getInitialPoseApprovalState(), LocalizationState::UNINITIALIZED);
+  EXPECT_TRUE(node_->getPublishedServiceLayerStates().empty());
+}
+
+TEST_F(AutowareStateMachineTest, IncompleteImuWhileRunningDoesNotRequestCalibrationSound)
+{
+  node_->completeWakeupSound();
+  node_->setLocalizationState(LocalizationState::INITIALIZED);
+  node_->setRouteState(RouteState::SET);
+  node_->setOperationMode(true, OperationModeState::AUTONOMOUS);
+  node_->setMotionState(MotionState::MOVING);
+  node_->completeEngageSound();
+  node_->clearPublishedServiceLayerStates();
+  node_->publishInitialPoseApprovalState(LocalizationState::UNINITIALIZED);
+  EXPECT_EQ(node_->getInitialPoseApprovalState(), LocalizationState::UNINITIALIZED);
+  EXPECT_TRUE(node_->getPublishedServiceLayerStates().empty());
 }
