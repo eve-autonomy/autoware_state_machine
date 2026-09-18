@@ -330,9 +330,13 @@ TEST_F(AutowareStateMachineTest, RestartAfterGoal)
 
 TEST_F(AutowareStateMachineTest, IncompleteImuWithAutowareControlEnabledRequestsCalibrationSound)
 {
+  ASSERT_EQ(node_->getServiceLayerState(), StateMachine::STATE_CHECK_NODE_ALIVE);
   node_->completeWakeupSound();
+  ASSERT_EQ(node_->getServiceLayerState(), StateMachine::STATE_DURING_WAKEUP);
 
   node_->setOperationMode(true, OperationModeState::STOP);
+  ASSERT_EQ(node_->getServiceLayerState(), StateMachine::STATE_DURING_WAKEUP);
+  ASSERT_EQ(node_->getControlLayerState(), StateMachine::AUTO);
 
   node_->clearPublishedServiceLayerStates();
   node_->publishInitialPoseApprovalState(LocalizationState::UNINITIALIZED);
@@ -346,9 +350,13 @@ TEST_F(AutowareStateMachineTest, IncompleteImuWithAutowareControlEnabledRequests
 
 TEST_F(AutowareStateMachineTest, IncompleteImuWithAutowareControlDisabledDoesNotRequestSound)
 {
+  ASSERT_EQ(node_->getServiceLayerState(), StateMachine::STATE_CHECK_NODE_ALIVE);
   node_->completeWakeupSound();
+  ASSERT_EQ(node_->getServiceLayerState(), StateMachine::STATE_DURING_WAKEUP);
 
   node_->setOperationMode(false, OperationModeState::AUTONOMOUS);
+  ASSERT_EQ(node_->getServiceLayerState(), StateMachine::STATE_DURING_WAKEUP);
+  ASSERT_EQ(node_->getControlLayerState(), StateMachine::MANUAL);
 
   node_->clearPublishedServiceLayerStates();
   node_->publishInitialPoseApprovalState(LocalizationState::UNINITIALIZED);
@@ -359,8 +367,11 @@ TEST_F(AutowareStateMachineTest, IncompleteImuWithAutowareControlDisabledDoesNot
 
 TEST_F(AutowareStateMachineTest, InitializingOrInitializedDoesNotRequestCalibrationSound)
 {
+  ASSERT_EQ(node_->getServiceLayerState(), StateMachine::STATE_CHECK_NODE_ALIVE);
   node_->completeWakeupSound();
+  ASSERT_EQ(node_->getServiceLayerState(), StateMachine::STATE_DURING_WAKEUP);
   node_->setOperationMode(true, OperationModeState::STOP);
+  ASSERT_EQ(node_->getControlLayerState(), StateMachine::AUTO);
 
   node_->clearPublishedServiceLayerStates();
   node_->publishInitialPoseApprovalState(LocalizationState::INITIALIZING);
@@ -375,8 +386,11 @@ TEST_F(AutowareStateMachineTest, InitializingOrInitializedDoesNotRequestCalibrat
 
 TEST_F(AutowareStateMachineTest, RepeatedIncompleteImuDoesNotPublishAnotherSoundRequest)
 {
+  ASSERT_EQ(node_->getServiceLayerState(), StateMachine::STATE_CHECK_NODE_ALIVE);
   node_->completeWakeupSound();
+  ASSERT_EQ(node_->getServiceLayerState(), StateMachine::STATE_DURING_WAKEUP);
   node_->setOperationMode(true, OperationModeState::STOP);
+  ASSERT_EQ(node_->getControlLayerState(), StateMachine::AUTO);
 
   node_->publishInitialPoseApprovalState(LocalizationState::UNINITIALIZED);
   ASSERT_TRUE(node_->isPlayingImuCalibrationSound());
@@ -389,7 +403,9 @@ TEST_F(AutowareStateMachineTest, RepeatedIncompleteImuDoesNotPublishAnotherSound
 
 TEST_F(AutowareStateMachineTest, IncompleteImuDuringWakeupSoundDoesNotRequestCalibrationSound)
 {
+  ASSERT_EQ(node_->getServiceLayerState(), StateMachine::STATE_CHECK_NODE_ALIVE);
   node_->setOperationMode(true, OperationModeState::STOP);
+  ASSERT_EQ(node_->getControlLayerState(), StateMachine::AUTO);
 
   node_->clearPublishedServiceLayerStates();
   node_->publishInitialPoseApprovalState(LocalizationState::UNINITIALIZED);
@@ -405,6 +421,9 @@ TEST_F(AutowareStateMachineTest, IncompleteImuWhileRunningDoesNotRequestCalibrat
   node_->setOperationMode(true, OperationModeState::AUTONOMOUS);
   node_->setMotionState(MotionState::MOVING);
   node_->completeEngageSound();
+  ASSERT_EQ(node_->getControlLayerState(), StateMachine::AUTO);
+  ASSERT_EQ(node_->getServiceLayerState(), StateMachine::STATE_RUNNING);
+
   node_->clearPublishedServiceLayerStates();
   node_->publishInitialPoseApprovalState(LocalizationState::UNINITIALIZED);
   EXPECT_EQ(node_->getInitialPoseApprovalState(), LocalizationState::UNINITIALIZED);
