@@ -71,6 +71,10 @@ protected:
   bool is_playing_arrival_sound_{false};
   bool is_playing_engage_sound_{false};
   bool is_playing_restart_sound_{false};
+  bool is_playing_imu_calibration_sound_{false};
+
+  autoware_adapi_v1_msgs::msg::LocalizationInitializationState
+    initial_pose_approval_state_;
 
   // Planning factors cache
   std::pair<std::string, double> cached_planning_selected_nearest_{"", 0.0};
@@ -87,6 +91,8 @@ private:
   void callbackMotionState(const autoware_adapi_v1_msgs::msg::MotionState::ConstSharedPtr msg);
   void callbackRouteState(const autoware_adapi_v1_msgs::msg::RouteState::ConstSharedPtr msg);
   void callbackLocalizationState(
+    const autoware_adapi_v1_msgs::msg::LocalizationInitializationState::ConstSharedPtr msg);
+  void callbackInitialPoseApprovalState(
     const autoware_adapi_v1_msgs::msg::LocalizationInitializationState::ConstSharedPtr msg);
   void callbackOperationModeState(
     const autoware_adapi_v1_msgs::msg::OperationModeState::ConstSharedPtr msg);
@@ -105,6 +111,8 @@ private:
   rclcpp::Subscription<autoware_adapi_v1_msgs::msg::RouteState>::SharedPtr sub_route_state_;
   rclcpp::Subscription<autoware_adapi_v1_msgs::msg::LocalizationInitializationState>::SharedPtr
     sub_localization_state_;
+  rclcpp::Subscription<autoware_adapi_v1_msgs::msg::LocalizationInitializationState>::SharedPtr
+    sub_initial_pose_approval_state_;
   rclcpp::Subscription<autoware_adapi_v1_msgs::msg::OperationModeState>::SharedPtr
     sub_operation_mode_state_;
   rclcpp::Subscription<autoware_adapi_v1_msgs::msg::VehicleStatus>::SharedPtr

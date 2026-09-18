@@ -42,6 +42,11 @@ AutowareStateMachine::AutowareStateMachine(const rclcpp::NodeOptions & options)
     this->create_subscription<autoware_adapi_v1_msgs::msg::LocalizationInitializationState>(
     "/api/localization/initialization_state", rclcpp::QoS{1},
     std::bind(&AutowareStateMachine::callbackLocalizationState, this, std::placeholders::_1));
+  sub_initial_pose_approval_state_ =
+    this->create_subscription<autoware_adapi_v1_msgs::msg::LocalizationInitializationState>(
+    "/localization/approver/initialization_state", qos_transient_local,
+    std::bind(
+      &AutowareStateMachine::callbackInitialPoseApprovalState, this, std::placeholders::_1));
   sub_operation_mode_state_ =
     this->create_subscription<autoware_adapi_v1_msgs::msg::OperationModeState>(
     "/api/operation_mode/state", rclcpp::QoS{1},
@@ -85,6 +90,8 @@ void AutowareStateMachine::setSoundPlayingFlagForState(const uint16_t service_la
     is_playing_restart_sound_ = true;
   } else if (service_layer_state == StateMachine::STATE_ARRIVED_GOAL) {
     is_playing_arrival_sound_ = true;
+  } else if (service_layer_state == StateMachine::STATE_INFORM_IMU_CALIBRATION) {
+    is_playing_imu_calibration_sound_ = true;
   }
 }
 
@@ -155,6 +162,8 @@ void AutowareStateMachine::updateStateFromTopics()
 
   if (is_playing_wakeup_sound_) {
     service_layer_state = StateMachine::STATE_CHECK_NODE_ALIVE;
+  } else if (is_playing_imu_calibration_sound_) {
+    service_layer_state = StateMachine::STATE_INFORM_IMU_CALIBRATION;
   } else if (localization_state_.state != LocalizationState::INITIALIZED) {
     service_layer_state = StateMachine::STATE_DURING_WAKEUP;
   } else if (emergency_holding_) {
@@ -335,6 +344,24 @@ void AutowareStateMachine::callbackLocalizationState(
   }
 }
 
+void AutowareStateMachine::callbackInitialPoseApprovalState(
+  const autoware_adapi_v1_msgs::msg::LocalizationInitializationState::ConstSharedPtr msg)
+{
+  using InitializationState = autoware_adapi_v1_msgs::msg::LocalizationInitializationState;
+  using StateMachine = autoware_state_machine_msgs::msg::StateMachine;
+
+  initial_pose_approval_state_ = *msg;
+
+  if (current_service_layer_state_ == StateMachine::STATE_DURING_WAKEUP &&
+    initial_pose_approval_state_.state == InitializationState::UNINITIALIZED &&
+    operation_mode_state_.is_autoware_control_enabled &&
+    !is_playing_imu_calibration_sound_)
+  {
+    is_playing_imu_calibration_sound_ = true;
+    updateStateFromTopics();
+  }
+}
+
 void AutowareStateMachine::callbackOperationModeState(
   const autoware_adapi_v1_msgs::msg::OperationModeState::ConstSharedPtr msg)
 {
@@ -451,6 +478,8 @@ void AutowareStateMachine::callbackStateSoundDone(
     has_started_driving_ = true;
   } else if (msg->state == StateMachine::STATE_ARRIVED_GOAL) {
     is_playing_arrival_sound_ = false;
+  } else if (msg->state == StateMachine::STATE_INFORM_IMU_CALIBRATION) {
+    is_playing_imu_calibration_sound_ = false;
   }
 
   updateStateFromTopics();
